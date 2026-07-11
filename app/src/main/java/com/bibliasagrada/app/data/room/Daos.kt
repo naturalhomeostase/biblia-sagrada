@@ -16,9 +16,6 @@ interface FavoriteDao {
     @Query("SELECT EXISTS(SELECT 1 FROM favorites WHERE bookId=:bookId AND chapter=:chapter AND verse=:verse)")
     suspend fun isFavorite(bookId: Int, chapter: Int, verse: Int): Boolean
 
-    @Query("SELECT bookId, chapter, verse FROM favorites WHERE bookId=:bookId AND chapter=:chapter")
-    suspend fun favoritesInChapter(bookId: Int, chapter: Int): List<FavoriteEntity>
-
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(entity: FavoriteEntity)
 
