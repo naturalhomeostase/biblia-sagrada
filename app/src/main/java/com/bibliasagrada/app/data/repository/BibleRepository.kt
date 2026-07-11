@@ -1,0 +1,168 @@
+package com.bibliasagrada.app.data.repository
+
+import android.content.Context
+import com.bibliasagrada.app.data.db.BibleDatabaseHelper
+import com.bibliasagrada.app.data.model.Book
+import com.bibliasagrada.app.data.model.ChapterRef
+import com.bibliasagrada.app.data.model.SearchResult
+import com.bibliasagrada.app.data.model.Translation
+import com.bibliasagrada.app.data.model.Verse
+import com.bibliasagrada.app.data.room.BookmarkEntity
+import com.bibliasagrada.app.data.room.FavoriteEntity
+import com.bibliasagrada.app.data.room.HighlightEntity
+import com.bibliasagrada.app.data.room.HistoryEntity
+import com.bibliasagrada.app.data.room.NoteEntity
+import com.bibliasagrada.app.data.room.ReadingProgressEntity
+import com.bibliasagrada.app.data.room.UserDataDatabase
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
+
+class BibleRepository(private val appContext: Context) {
+
+    private val userDb = UserDataDatabase.getInstance(appContext)
+    val prefs = PreferencesManager(appContext)
+
+    private val initialTranslation: Translation = runBlocking {
+        val savedFileName = prefs.activeTranslationFileName.first()
+        val candidate = TranslationsCatalog.byFileName(savedFileName)
+        if (candidate.builtIn || TranslationDownloadManager.isDownloaded(appContext, candidate)) {
+            candidate
+        } else {
+            TranslationsCatalog.BLIVRE
+        }
+    }
+
+    @Volatile
+    private var bibleDb: BibleDatabaseHelper = BibleDatabaseHelper.open(
+        appContext,
+        initialTranslation.fileName,
+        isBuiltIn = initialTranslation.builtIn
+    )
+
+    private val _activeTranslation = MutableStateFlow(initialTranslation)
+    /** Tradução atualmente aberta para leitura. Observe para reagir a trocas de tradução. */
+    val activeTranslation: StateFlow<Translation> = _activeTranslation.asStateFlow()
+
+    /**
+     * Troca a tradução ativa. O arquivo precisa já estar disponível localmente
+     * (embutido ou já baixado — ver TranslationDownloadManager.isDownloaded).
+     */
+    suspend fun switchTranslation(translation: Translation) = withContext(Dispatchers.IO) {
+        val newDb = BibleDatabaseHelper.open(appContext, translation.fileName, translation.builtIn)
+        val old = bibleDb
+        bibleDb = newDb
+        old.close()
+        prefs.setActiveTranslationFileName(translation.fileName)
+        _activeTranslation.value = translation
+    }
+
+    // --- Leitura da Bíblia ---
+    // Todas as funções abaixo tocam o SQLite bruto (BibleDatabaseHelper) de forma síncrona.
+    // São expostas como `suspend` e sempre executadas em Dispatchers.IO para nunca travar
+    // a main thread — foi isso que causava o ANR "Application does not have a focused window".
+    suspend fun getBooks(): List<Book> = withContext(Dispatchers.IO) { bibleDb.getBooks() }
+    suspend fun getBook(bookId: Int): Book? = withContext(Dispatchers.IO) { bibleDb.getBook(bookId) }
+    suspend fun getChapter(bookId: Int, chapter: Int): List<Verse> =
+        withContext(Dispatchers.IO) { bibleDb.getChapter(bookId, chapter) }
+    suspend fun getVerse(bookId: Int, chapter: Int, verse: Int): Verse? =
+        withContext(Dispatchers.IO) { bibleDb.getVerse(bookId, chapter, verse) }
+    suspend fun getVerseById(id: Long): Verse? = withContext(Dispatchers.IO) { bibleDb.getVerseById(id) }
+    suspend fun searchWords(query: String, testament: String? = null): List<SearchResult> =
+        withContext(Dispatchers.IO) { bibleDb.searchWords(query, testament) }
+    suspend fun searchByReference(query: String): Verse? =
+        withContext(Dispatchers.IO) { bibleDb.searchByReference(query) }
+
+    /** Lista contínua de todos os capítulos da Bíblia, na ordem canônica, para navegação por gesto (swipe). */
+    suspend fun getAllChapterRefs(): List<ChapterRef> = withContext(Dispatchers.IO) {
+        val refs = mutableListOf<ChapterRef>()
+        for (book in bibleDb.getBooks()) {
+            for (chapter in 1..book.chapterCount) {
+                refs.add(ChapterRef(book.id, chapter, book.name, book.abbrev))
+            }
+        }
+        refs
+    }
+
+    // --- Favoritos ---
+    fun observeFavorites(): Flow<List<FavoriteEntity>> = userDb.favoriteDao().observeAll()
+    suspend fun isFavorite(bookId: Int, chapter: Int, verse: Int) =
+        userDb.favoriteDao().isFavorite(bookId, chapter, verse)
+    suspend fun toggleFavorite(bookId: Int, chapter: Int, verse: Int) {
+        if (userDb.favoriteDao().isFavorite(bookId, chapter, verse)) {
+            userDb.favoriteDao().delete(bookId, chapter, verse)
+        } else {
+            userDb.favoriteDao().insert(FavoriteEntity(bookId, chapter, verse))
+        }
+    }
+
+    // --- Destaques (highlights) ---
+    fun observeHighlightsForChapter(bookId: Int, chapter: Int): Flow<List<HighlightEntity>> =
+        userDb.highlightDao().observeForChapter(bookId, chapter)
+    fun observeAllHighlights(): Flow<List<HighlightEntity>> = userDb.highlightDao().observeAll()
+    suspend fun setHighlight(bookId: Int, chapter: Int, verse: Int, color: String?) {
+        if (color == null) {
+            userDb.highlightDao().delete(bookId, chapter, verse)
+        } else {
+            userDb.highlightDao().insert(HighlightEntity(bookId, chapter, verse, color))
+        }
+    }
+
+    // --- Notas ---
+    fun observeAllNotes(): Flow<List<NoteEntity>> = userDb.noteDao().observeAll()
+    fun observeNotesForChapter(bookId: Int, chapter: Int): Flow<List<NoteEntity>> =
+        userDb.noteDao().observeForChapter(bookId, chapter)
+    suspend fun getNoteForVerse(bookId: Int, chapter: Int, verse: Int): NoteEntity? =
+        userDb.noteDao().getForVerse(bookId, chapter, verse)
+    suspend fun saveNote(existing: NoteEntity?, bookId: Int, chapter: Int, verse: Int, text: String) {
+        if (text.isBlank()) {
+            existing?.let { userDb.noteDao().delete(it) }
+            return
+        }
+        if (existing != null) {
+            userDb.noteDao().update(existing.copy(text = text, updatedAt = System.currentTimeMillis()))
+        } else {
+            userDb.noteDao().insert(NoteEntity(bookId = bookId, chapter = chapter, verse = verse, text = text))
+        }
+    }
+
+    // --- Histórico ---
+    fun observeHistory(): Flow<List<HistoryEntity>> = userDb.historyDao().observeRecent()
+    suspend fun recordHistory(bookId: Int, chapter: Int) {
+        userDb.historyDao().insert(HistoryEntity(bookId, chapter))
+    }
+
+    // --- Continuar de onde parei ---
+    fun observeReadingProgress(): Flow<ReadingProgressEntity?> = userDb.readingProgressDao().observe()
+    suspend fun getReadingProgress(): ReadingProgressEntity? = userDb.readingProgressDao().get()
+    suspend fun saveReadingProgress(bookId: Int, chapter: Int, verse: Int) {
+        userDb.readingProgressDao().save(ReadingProgressEntity(0, bookId, chapter, verse))
+    }
+
+    // --- Marcadores de página (bookmarks nomeados) ---
+    fun observeBookmarks(): Flow<List<BookmarkEntity>> = userDb.bookmarkDao().observeAll()
+    fun observeBookmarksForChapter(bookId: Int, chapter: Int): Flow<List<BookmarkEntity>> =
+        userDb.bookmarkDao().observeForChapter(bookId, chapter)
+    suspend fun addBookmark(bookId: Int, chapter: Int, name: String) {
+        userDb.bookmarkDao().insert(BookmarkEntity(bookId = bookId, chapter = chapter, name = name))
+    }
+    suspend fun removeBookmark(id: Long) {
+        userDb.bookmarkDao().deleteById(id)
+    }
+    suspend fun removeBookmarksForChapter(bookId: Int, chapter: Int) {
+        userDb.bookmarkDao().deleteForChapter(bookId, chapter)
+    }
+
+    companion object {
+        @Volatile private var instance: BibleRepository? = null
+        fun getInstance(context: Context): BibleRepository =
+            instance ?: synchronized(this) {
+                instance ?: BibleRepository(context.applicationContext).also { instance = it }
+            }
+    }
+}
