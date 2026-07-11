@@ -24,10 +24,41 @@ android {
         noCompress += "db"
     }
 
+    // Assinatura de release: usada para gerar um APK com identidade estável
+    // (necessário para instalar sem o aviso extra de "app de depuração" e
+    // para poder futuramente publicar/atualizar o mesmo app). As credenciais
+    // vêm de variáveis de ambiente (definidas como Secrets no GitHub Actions)
+    // e NUNCA ficam no código-fonte. Se não estiverem definidas (ex.: build
+    // local sem as secrets), o app volta a usar a assinatura de debug comum,
+    // então nada quebra.
+    val releaseKeystorePath = System.getenv("RELEASE_KEYSTORE_PATH")
+    val releaseStorePassword = System.getenv("RELEASE_STORE_PASSWORD")
+    val releaseKeyAlias = System.getenv("RELEASE_KEY_ALIAS")
+    val releaseKeyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+    val hasReleaseSigning = !releaseKeystorePath.isNullOrBlank() &&
+        !releaseStorePassword.isNullOrBlank() &&
+        !releaseKeyAlias.isNullOrBlank() &&
+        !releaseKeyPassword.isNullOrBlank() &&
+        file(releaseKeystorePath).exists()
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(releaseKeystorePath!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
