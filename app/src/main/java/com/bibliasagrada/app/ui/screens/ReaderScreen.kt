@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -186,8 +187,9 @@ fun ReaderScreen(
                 )
             }
 
-            // Setinhas sutis nas bordas, lembrando que dá para arrastar para o
-            // capítulo anterior/seguinte.
+            // Setinhas nas bordas: além de indicar visualmente que dá para
+            // arrastar, também funcionam como botão, para quem preferir tocar
+            // em vez de arrastar.
             if (pagerState.currentPage > 0) {
                 Icon(
                     Icons.Filled.ChevronLeft,
@@ -197,6 +199,12 @@ fun ReaderScreen(
                         .align(Alignment.CenterStart)
                         .padding(start = 2.dp)
                         .size(32.dp)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) {
+                            scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
+                        }
                 )
             }
             if (pagerState.currentPage < chapterRefs.size - 1) {
@@ -208,6 +216,12 @@ fun ReaderScreen(
                         .align(Alignment.CenterEnd)
                         .padding(end = 2.dp)
                         .size(32.dp)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) {
+                            scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+                        }
                 )
             }
         }
