@@ -4,6 +4,8 @@ import android.content.Intent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -19,10 +21,13 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
-import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -46,7 +51,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
@@ -59,6 +66,9 @@ import com.bibliasagrada.app.ui.components.VerseActionSheet
 import com.bibliasagrada.app.ui.theme.LocalHighlightColors
 import com.bibliasagrada.app.ui.theme.readingTextStyle
 import kotlinx.coroutines.launch
+
+private const val MIN_FONT_SCALE = 0.7f
+private const val MAX_FONT_SCALE = 1.8f
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -102,15 +112,30 @@ fun ReaderScreen(
     }.collectAsState(initial = emptyList())
     val isChapterBookmarked = bookmarksInChapter.isNotEmpty()
 
+    fun changeFontScale(delta: Float) {
+        scope.launch {
+            repository.prefs.setFontScale((fontScale + delta).coerceIn(MIN_FONT_SCALE, MAX_FONT_SCALE))
+        }
+    }
+
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
-                    Text(
-                        text = if (currentRef != null) "${currentRef.bookName} ${currentRef.chapter}" else "",
-                        maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = if (currentRef != null) "${currentRef.bookName} ${currentRef.chapter}" else "",
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+                        // Linhazinha na cor do tema, para marcar visualmente o título do capítulo.
+                        Box(
+                            modifier = Modifier
+                                .padding(top = 3.dp)
+                                .size(width = 36.dp, height = 2.dp)
+                                .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(1.dp))
+                        )
+                    }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background
@@ -127,29 +152,64 @@ fun ReaderScreen(
                             contentDescription = if (isChapterBookmarked) "Remover marcador" else "Marcar esta página"
                         )
                     }
-                    IconButton(onClick = {
-                        scope.launch {
-                            repository.prefs.setFontScale((fontScale + 0.1f).coerceAtMost(1.8f))
-                        }
-                    }) {
-                        Icon(Icons.Filled.TextFields, contentDescription = "Aumentar fonte")
+                    IconButton(
+                        onClick = { changeFontScale(-0.1f) },
+                        enabled = fontScale > MIN_FONT_SCALE
+                    ) {
+                        Icon(Icons.Filled.Remove, contentDescription = "Diminuir fonte")
+                    }
+                    IconButton(
+                        onClick = { changeFontScale(0.1f) },
+                        enabled = fontScale < MAX_FONT_SCALE
+                    ) {
+                        Icon(Icons.Filled.Add, contentDescription = "Aumentar fonte")
                     }
                 }
             )
         }
     ) { padding ->
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.fillMaxSize().padding(padding)
-        ) { page ->
-            val ref = chapterRefs[page]
-            ChapterPage(
-                repository = repository,
-                ref = ref,
-                fontScale = fontScale,
-                scrollToVerse = if (page == startPageValue && initialVerse > 0) initialVerse else null,
-                onVerseClick = { verse -> selectedVerse = verse }
-            )
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                val ref = chapterRefs[page]
+                ChapterPage(
+                    repository = repository,
+                    ref = ref,
+                    fontScale = fontScale,
+                    scrollToVerse = if (page == startPageValue && initialVerse > 0) initialVerse else null,
+                    onVerseClick = { verse -> selectedVerse = verse },
+                    onFontScaleChange = { newScale ->
+                        scope.launch { repository.prefs.setFontScale(newScale.coerceIn(MIN_FONT_SCALE, MAX_FONT_SCALE)) }
+                    }
+                )
+            }
+
+            // Setinhas sutis nas bordas, lembrando que dá para arrastar para o
+            // capítulo anterior/seguinte.
+            if (pagerState.currentPage > 0) {
+                Icon(
+                    Icons.Filled.ChevronLeft,
+                    contentDescription = "Capítulo anterior",
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(start = 2.dp)
+                        .size(32.dp)
+                )
+            }
+            if (pagerState.currentPage < chapterRefs.size - 1) {
+                Icon(
+                    Icons.Filled.ChevronRight,
+                    contentDescription = "Próximo capítulo",
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 2.dp)
+                        .size(32.dp)
+                )
+            }
         }
     }
 
@@ -308,7 +368,8 @@ private fun ChapterPage(
     ref: ChapterRef,
     fontScale: Float,
     scrollToVerse: Int?,
-    onVerseClick: (Verse) -> Unit
+    onVerseClick: (Verse) -> Unit,
+    onFontScaleChange: (Float) -> Unit
 ) {
     var verses by remember(ref) { mutableStateOf<List<Verse>>(emptyList()) }
     val highlights by remember(ref) { repository.observeHighlightsForChapter(ref.bookId, ref.chapter) }
@@ -317,6 +378,10 @@ private fun ChapterPage(
         .collectAsState(initial = emptyList())
     val listState = rememberLazyListState()
     val highlightColors = LocalHighlightColors.current
+
+    // Fonte "ao vivo": muda instantaneamente durante o gesto de pinça, e só é
+    // salva de verdade (via onFontScaleChange) quando o usuário solta os dedos.
+    var liveFontScale by remember(fontScale) { mutableStateOf(fontScale) }
 
     LaunchedEffect(ref) {
         verses = repository.getChapter(ref.bookId, ref.chapter)
@@ -331,7 +396,41 @@ private fun ChapterPage(
 
     val highlightMap = remember(highlights) { highlights.associateBy { it.verse } }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            // Zoom com dois dedos (pinça) para ajustar o tamanho da fonte, do
+            // mesmo jeito que se usa para dar zoom em fotos. Só reage quando
+            // há 2 dedos na tela, então não atrapalha o arrastar (swipe) de
+            // um dedo só que troca de capítulo.
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    var initialDistance = 0f
+                    var initialScale = 1f
+                    var isScaling = false
+                    awaitFirstDown(requireUnconsumed = false)
+                    do {
+                        val event = awaitPointerEvent()
+                        val pointers = event.changes.filter { it.pressed }
+                        if (pointers.size >= 2) {
+                            val distance = (pointers[0].position - pointers[1].position).getDistance()
+                            if (initialDistance == 0f) {
+                                initialDistance = distance
+                                initialScale = liveFontScale
+                            } else if (distance > 0f) {
+                                isScaling = true
+                                liveFontScale = (initialScale * (distance / initialDistance))
+                                    .coerceIn(MIN_FONT_SCALE, MAX_FONT_SCALE)
+                            }
+                            pointers.forEach { it.consume() }
+                        } else {
+                            initialDistance = 0f
+                        }
+                    } while (event.changes.any { it.pressed })
+                    if (isScaling) onFontScaleChange(liveFontScale)
+                }
+            }
+    ) {
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
@@ -358,7 +457,7 @@ private fun ChapterPage(
                     )
                     Text(
                         text = verse.text,
-                        style = readingTextStyle(fontScale)
+                        style = readingTextStyle(liveFontScale)
                     )
                 }
             }

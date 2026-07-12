@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 
@@ -148,6 +149,11 @@ class BibleRepository(private val appContext: Context) {
     fun observeBookmarks(): Flow<List<BookmarkEntity>> = userDb.bookmarkDao().observeAll()
     fun observeBookmarksForChapter(bookId: Int, chapter: Int): Flow<List<BookmarkEntity>> =
         userDb.bookmarkDao().observeForChapter(bookId, chapter)
+    fun observeBookmarksForBook(bookId: Int): Flow<List<BookmarkEntity>> =
+        userDb.bookmarkDao().observeForBook(bookId)
+    /** Ids dos livros que têm ao menos um marcador — para mostrar o ícone na lista de livros. */
+    fun observeBookmarkedBookIds(): Flow<Set<Int>> =
+        userDb.bookmarkDao().observeAll().map { list -> list.map { it.bookId }.toSet() }
     suspend fun addBookmark(bookId: Int, chapter: Int, name: String) {
         userDb.bookmarkDao().insert(BookmarkEntity(bookId = bookId, chapter = chapter, name = name))
     }

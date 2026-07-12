@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Bookmarks
 import androidx.compose.material.icons.filled.EditNote
@@ -39,6 +40,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -63,6 +65,7 @@ fun BooksScreen(
     onNotes: () -> Unit,
     onBookmarks: () -> Unit,
     onTranslations: () -> Unit,
+    onPromises: () -> Unit,
     onSettings: () -> Unit,
     onAbout: () -> Unit
 ) {
@@ -70,6 +73,7 @@ fun BooksScreen(
     var progress by remember { mutableStateOf<Triple<Int, Int, Int>?>(null) }
     var menuExpanded by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableIntStateOf(0) }
+    val bookmarkedBookIds by repository.observeBookmarkedBookIds().collectAsState(initial = emptySet())
 
     LaunchedEffect(Unit) {
         books = repository.getBooks()
@@ -115,6 +119,11 @@ fun BooksScreen(
                             text = { Text("Traduções") },
                             leadingIcon = { Icon(Icons.Filled.Translate, null) },
                             onClick = { menuExpanded = false; onTranslations() }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Caixinha de Promessas") },
+                            leadingIcon = { Icon(Icons.Filled.AutoAwesome, null) },
+                            onClick = { menuExpanded = false; onPromises() }
                         )
                         DropdownMenuItem(
                             text = { Text("Configurações") },
@@ -185,7 +194,17 @@ fun BooksScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(book.name, style = MaterialTheme.typography.bodyLarge.copy(fontSize = 17.sp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(book.name, style = MaterialTheme.typography.bodyLarge.copy(fontSize = 17.sp))
+                            if (bookmarkedBookIds.contains(book.id)) {
+                                Icon(
+                                    Icons.Filled.Bookmark,
+                                    contentDescription = "Tem marcador",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(start = 6.dp).size(16.dp)
+                                )
+                            }
+                        }
                         Text(
                             "${book.chapterCount} cap.",
                             style = MaterialTheme.typography.labelMedium,

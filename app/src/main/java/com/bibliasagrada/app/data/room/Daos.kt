@@ -91,6 +91,9 @@ interface BookmarkDao {
     @Query("SELECT * FROM bookmarks WHERE bookId=:bookId AND chapter=:chapter ORDER BY createdAt DESC")
     fun observeForChapter(bookId: Int, chapter: Int): Flow<List<BookmarkEntity>>
 
+    @Query("SELECT * FROM bookmarks WHERE bookId=:bookId ORDER BY chapter ASC")
+    fun observeForBook(bookId: Int): Flow<List<BookmarkEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(entity: BookmarkEntity): Long
 

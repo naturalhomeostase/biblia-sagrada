@@ -6,12 +6,14 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -22,6 +24,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,6 +45,11 @@ fun ChaptersScreen(
     onOpenChapter: (Int) -> Unit
 ) {
     var book by remember { mutableStateOf<Book?>(null) }
+    val bookmarkedChapters by remember(bookId) { repository.observeBookmarksForBook(bookId) }
+        .collectAsState(initial = emptyList())
+    val bookmarkedChapterNumbers = remember(bookmarkedChapters) {
+        bookmarkedChapters.map { it.chapter }.toSet()
+    }
 
     LaunchedEffect(bookId) {
         book = repository.getBook(bookId)
@@ -83,6 +91,17 @@ fun ChaptersScreen(
                             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                                 Text("$chapter", style = MaterialTheme.typography.titleMedium)
                             }
+                        }
+                        if (bookmarkedChapterNumbers.contains(chapter)) {
+                            Icon(
+                                Icons.Filled.Bookmark,
+                                contentDescription = "Capítulo marcado",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(top = 2.dp, end = 4.dp)
+                                    .size(16.dp)
+                            )
                         }
                     }
                 }

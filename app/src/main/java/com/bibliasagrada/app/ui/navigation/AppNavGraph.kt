@@ -14,6 +14,7 @@ import com.bibliasagrada.app.ui.screens.ChaptersScreen
 import com.bibliasagrada.app.ui.screens.FavoritesScreen
 import com.bibliasagrada.app.ui.screens.HistoryScreen
 import com.bibliasagrada.app.ui.screens.NotesScreen
+import com.bibliasagrada.app.ui.screens.PromisesScreen
 import com.bibliasagrada.app.ui.screens.ReaderScreen
 import com.bibliasagrada.app.ui.screens.SearchScreen
 import com.bibliasagrada.app.ui.screens.SettingsScreen
@@ -37,6 +38,7 @@ fun AppNavGraph(repository: BibleRepository) {
                 onNotes = { navController.navigate(Routes.NOTES) },
                 onBookmarks = { navController.navigate(Routes.BOOKMARKS) },
                 onTranslations = { navController.navigate(Routes.TRANSLATIONS) },
+                onPromises = { navController.navigate(Routes.PROMISES) },
                 onSettings = { navController.navigate(Routes.SETTINGS) },
                 onAbout = { navController.navigate(Routes.ABOUT) }
             )
@@ -128,6 +130,15 @@ fun AppNavGraph(repository: BibleRepository) {
                     navController.navigate(Routes.BOOKS) {
                         popUpTo(0)
                     }
+                }
+            )
+        }
+        composable(Routes.PROMISES) {
+            PromisesScreen(
+                repository = repository,
+                onBack = { navController.popBackStack() },
+                onOpenReader = { bookId, chapter, verse ->
+                    navController.navigate(Routes.reader(bookId, chapter, verse))
                 }
             )
         }

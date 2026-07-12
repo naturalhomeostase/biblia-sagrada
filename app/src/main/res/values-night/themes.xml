@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.BibliaSagrada" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <!-- Mesmo fundo escuro do ícone, para a transição do ícone para o
+             app ficar contínua quando o celular está no modo escuro. -->
+        <item name="android:windowBackground">#21140B</item>
+    </style>
+</resources>
