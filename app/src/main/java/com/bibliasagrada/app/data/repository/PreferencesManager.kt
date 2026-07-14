@@ -14,8 +14,8 @@ private val Context.dataStore by preferencesDataStore(name = "settings")
 
 enum class ThemeMode { CLARO, ESCURO, SISTEMA }
 
-/** Paleta de cores do app: dourada (padrão) ou preto e branco (clássica). */
-enum class ColorPalette { DOURADO, PRETO_BRANCO }
+/** Paleta de cores do app: dourada (padrão), preto e branco (clássica), ou rosa (Bíblia para mulheres). */
+enum class ColorPalette { DOURADO, PRETO_BRANCO, ROSA }
 
 class PreferencesManager(private val context: Context) {
 

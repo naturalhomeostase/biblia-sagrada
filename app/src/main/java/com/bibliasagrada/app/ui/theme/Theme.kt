@@ -59,8 +59,35 @@ private val MonoDarkColors = darkColorScheme(
     outline = MonoDarkOutline
 )
 
+private val RoseLightColors = lightColorScheme(
+    primary = RoseLightPrimary,
+    onPrimary = RoseLightOnPrimary,
+    secondary = RoseLightSecondary,
+    background = RoseLightBackground,
+    onBackground = RoseLightOnBackground,
+    surface = RoseLightSurface,
+    onSurface = RoseLightOnBackground,
+    surfaceVariant = RoseLightSurfaceVariant,
+    outline = RoseLightOutline
+)
+
+private val RoseDarkColors = darkColorScheme(
+    primary = RoseDarkPrimary,
+    onPrimary = RoseDarkOnPrimary,
+    secondary = RoseDarkSecondary,
+    background = RoseDarkBackground,
+    onBackground = RoseDarkOnBackground,
+    surface = RoseDarkSurface,
+    onSurface = RoseDarkOnBackground,
+    surfaceVariant = RoseDarkSurfaceVariant,
+    outline = RoseDarkOutline
+)
+
 /** Indica, em qualquer ponto da árvore de composição, se o tema escuro está ativo. */
 val LocalIsDarkTheme = compositionLocalOf { false }
+
+/** Paleta de cores atual — usada por telas que precisam de um detalhe visual específico da paleta (ex.: gradiente do tema rosa). */
+val LocalColorPalette = compositionLocalOf { ColorPalette.DOURADO }
 
 /** Cores de marcação (highlight) adequadas ao tema atual (claro ou escuro). */
 val LocalHighlightColors = compositionLocalOf<Map<String, Color>> { LightHighlightColors }
@@ -80,12 +107,14 @@ fun BibliaSagradaTheme(
     val colorScheme = when (colorPalette) {
         ColorPalette.DOURADO -> if (darkTheme) GoldDarkColors else GoldLightColors
         ColorPalette.PRETO_BRANCO -> if (darkTheme) MonoDarkColors else MonoLightColors
+        ColorPalette.ROSA -> if (darkTheme) RoseDarkColors else RoseLightColors
     }
 
     val highlightColors = if (darkTheme) DarkHighlightColors else LightHighlightColors
 
     CompositionLocalProvider(
         LocalIsDarkTheme provides darkTheme,
+        LocalColorPalette provides colorPalette,
         LocalHighlightColors provides highlightColors
     ) {
         MaterialTheme(

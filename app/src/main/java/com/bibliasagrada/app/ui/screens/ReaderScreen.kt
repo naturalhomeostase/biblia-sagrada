@@ -60,6 +60,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -70,8 +71,10 @@ import com.bibliasagrada.app.R
 import com.bibliasagrada.app.data.model.ChapterRef
 import com.bibliasagrada.app.data.model.Verse
 import com.bibliasagrada.app.data.repository.BibleRepository
+import com.bibliasagrada.app.data.repository.ColorPalette
 import com.bibliasagrada.app.data.room.NoteEntity
 import com.bibliasagrada.app.ui.components.VerseActionSheet
+import com.bibliasagrada.app.ui.theme.LocalColorPalette
 import com.bibliasagrada.app.ui.theme.LocalHighlightColors
 import com.bibliasagrada.app.ui.theme.readingTextStyle
 import com.bibliasagrada.app.util.QuoteImageGenerator
@@ -161,54 +164,75 @@ fun ReaderScreen(
         }
     }
 
+    val colorPalette = LocalColorPalette.current
+
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = if (currentRef != null) "${currentRef.bookName} ${currentRef.chapter}" else "",
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            Box(
+                modifier = if (colorPalette == ColorPalette.ROSA) {
+                    Modifier.background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                                MaterialTheme.colorScheme.background
+                            )
                         )
-                        // Linhazinha na cor do tema, para marcar visualmente o título do capítulo.
-                        Box(
-                            modifier = Modifier
-                                .padding(top = 3.dp)
-                                .size(width = 36.dp, height = 2.dp)
-                                .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(1.dp))
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
-                ),
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Voltar")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { showBookmarkDialog = true }) {
-                        Icon(
-                            if (isChapterBookmarked) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder,
-                            contentDescription = if (isChapterBookmarked) "Remover marcador" else "Marcar esta página"
-                        )
-                    }
-                    IconButton(
-                        onClick = { changeFontScale(-0.1f) },
-                        enabled = fontScale > MIN_FONT_SCALE
-                    ) {
-                        Icon(Icons.Filled.Remove, contentDescription = "Diminuir fonte")
-                    }
-                    IconButton(
-                        onClick = { changeFontScale(0.1f) },
-                        enabled = fontScale < MAX_FONT_SCALE
-                    ) {
-                        Icon(Icons.Filled.Add, contentDescription = "Aumentar fonte")
-                    }
+                    )
+                } else {
+                    Modifier
                 }
-            )
+            ) {
+                CenterAlignedTopAppBar(
+                    title = {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = if (currentRef != null) "${currentRef.bookName} ${currentRef.chapter}" else "",
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                            // Linhazinha na cor do tema, para marcar visualmente o título do capítulo.
+                            Box(
+                                modifier = Modifier
+                                    .padding(top = 3.dp)
+                                    .size(width = 36.dp, height = 2.dp)
+                                    .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(1.dp))
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                        containerColor = if (colorPalette == ColorPalette.ROSA) {
+                            Color.Transparent
+                        } else {
+                            MaterialTheme.colorScheme.background
+                        }
+                    ),
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.Filled.ArrowBack, contentDescription = "Voltar")
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { showBookmarkDialog = true }) {
+                            Icon(
+                                if (isChapterBookmarked) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder,
+                                contentDescription = if (isChapterBookmarked) "Remover marcador" else "Marcar esta página"
+                            )
+                        }
+                        IconButton(
+                            onClick = { changeFontScale(-0.1f) },
+                            enabled = fontScale > MIN_FONT_SCALE
+                        ) {
+                            Icon(Icons.Filled.Remove, contentDescription = "Diminuir fonte")
+                        }
+                        IconButton(
+                            onClick = { changeFontScale(0.1f) },
+                            enabled = fontScale < MAX_FONT_SCALE
+                        ) {
+                            Icon(Icons.Filled.Add, contentDescription = "Aumentar fonte")
+                        }
+                    }
+                )
+            }
         }
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
@@ -278,7 +302,7 @@ fun ReaderScreen(
         repository.saveReadingProgress(ref.bookId, ref.chapter, 1)
         if (pagerState.currentPage != previousPage) {
             if (soundEnabled && pageTurnSoundId != 0) {
-                soundPool.play(pageTurnSoundId, 0.6f, 0.6f, 1, 0, 1f)
+                soundPool.play(pageTurnSoundId, 0.35f, 0.35f, 1, 0, 1f)
             }
             previousPage = pagerState.currentPage
         }

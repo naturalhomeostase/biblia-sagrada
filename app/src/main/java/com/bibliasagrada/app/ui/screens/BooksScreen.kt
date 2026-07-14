@@ -1,8 +1,10 @@
 package com.bibliasagrada.app.ui.screens
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -53,10 +55,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bibliasagrada.app.data.model.Book
 import com.bibliasagrada.app.data.repository.BibleRepository
+import com.bibliasagrada.app.data.repository.ColorPalette
+import com.bibliasagrada.app.ui.theme.LocalColorPalette
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -83,6 +89,7 @@ fun BooksScreen(
     var menuExpanded by remember { mutableStateOf(false) }
     val pagerState = rememberPagerState(pageCount = { 2 })
     val bookmarkedBookIds by repository.observeBookmarkedBookIds().collectAsState(initial = emptySet())
+    val colorPalette = LocalColorPalette.current
 
     LaunchedEffect(Unit) {
         books = repository.getBooks()
@@ -93,9 +100,25 @@ fun BooksScreen(
 
     Scaffold(
         topBar = {
+            Box(
+                modifier = if (colorPalette == ColorPalette.ROSA) {
+                    Modifier.background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                                MaterialTheme.colorScheme.background
+                            )
+                        )
+                    )
+                } else {
+                    Modifier
+                }
+            ) {
             TopAppBar(
                 title = { Text("Bíblia Sagrada") },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = if (colorPalette == ColorPalette.ROSA) Color.Transparent else MaterialTheme.colorScheme.background
+                ),
                 actions = {
                     IconButton(onClick = onSearch) {
                         Icon(Icons.Filled.Search, contentDescription = "Buscar")
@@ -157,6 +180,7 @@ fun BooksScreen(
                     }
                 }
             )
+            }
         }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {

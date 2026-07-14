@@ -87,6 +87,9 @@ fun SettingsScreen(
             PaletteOption("Preto e branco (clássico)", ColorPalette.PRETO_BRANCO, colorPalette) {
                 scope.launch { repository.prefs.setColorPalette(it) }
             }
+            PaletteOption("Bíblia para mulheres (rosa antigo)", ColorPalette.ROSA, colorPalette) {
+                scope.launch { repository.prefs.setColorPalette(it) }
+            }
 
             Text("Leitura", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 24.dp))
             Row(

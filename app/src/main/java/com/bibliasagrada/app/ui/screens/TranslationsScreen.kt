@@ -1,9 +1,14 @@
 package com.bibliasagrada.app.ui.screens
 
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -12,19 +17,21 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -38,11 +45,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.bibliasagrada.app.data.model.Translation
 import com.bibliasagrada.app.data.repository.BibleRepository
-import com.bibliasagrada.app.data.repository.DownloadResult
 import com.bibliasagrada.app.data.repository.TranslationDownloadManager
 import com.bibliasagrada.app.data.repository.TranslationsCatalog
+import com.bibliasagrada.app.util.TranslationImporter
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -56,10 +62,32 @@ fun TranslationsScreen(
     val scope = rememberCoroutineScope()
     val active by repository.activeTranslation.collectAsState()
 
-    // progress[fileName] = 0f..1f enquanto baixa; null quando não está baixando
-    var progress by remember { mutableStateOf<Map<String, Float>>(emptyMap()) }
+    var isImporting by remember { mutableStateOf<String?>(null) } // fileName sendo importado agora
     var errors by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
-    var downloadedTick by remember { mutableStateOf(0) } // força recomposição após baixar/remover
+    var refreshTick by remember { mutableStateOf(0) } // força recomposição após importar/remover
+
+    // Alvo da importação: preenchido quando o usuário toca "Importar arquivo"
+    // num card específico, para sabermos para qual tradução salvar o resultado.
+    var importTargetFileName by remember { mutableStateOf<String?>(null) }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        val targetFileName = importTargetFileName
+        if (uri != null && targetFileName != null) {
+            scope.launch {
+                isImporting = targetFileName
+                errors = errors - targetFileName
+                val result = TranslationImporter.importFromUri(context, uri, targetFileName)
+                isImporting = null
+                when (result) {
+                    is TranslationImporter.ImportResult.Success -> refreshTick++
+                    is TranslationImporter.ImportResult.Failure ->
+                        errors = errors + (targetFileName to result.message)
+                }
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -78,18 +106,54 @@ fun TranslationsScreen(
         ) {
             item {
                 Text(
-                    "Escolha qual tradução usar para ler a Bíblia. A Bíblia Livre já vem " +
-                        "pronta e funciona 100% offline; as demais precisam ser baixadas uma vez.",
+                    "Escolha qual tradução usar para ler a Bíblia. A Bíblia Livre já vem pronta e " +
+                        "funciona 100% offline.",
                     style = MaterialTheme.typography.bodyMedium
                 )
-                androidx.compose.foundation.layout.Spacer(Modifier.padding(top = 12.dp))
+                Spacer(Modifier.padding(top = 12.dp))
             }
+
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            "Sobre as traduções abaixo (além da Bíblia Livre)",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            "Este app não fornece nem hospeda essas traduções — os textos bíblicos " +
+                                "pertencem às suas respectivas editoras/sociedades bíblicas. Você pode " +
+                                "baixar o arquivo por conta própria numa fonte externa e depois importar " +
+                                "aqui. A responsabilidade pelo conteúdo e pelos direitos de uso do arquivo " +
+                                "escolhido é de quem faz o download.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(top = 6.dp)
+                        )
+                        TextButton(
+                            onClick = {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(TranslationsCatalog.EXTERNAL_SOURCE_URL))
+                                context.startActivity(intent)
+                            },
+                            modifier = Modifier.padding(top = 4.dp)
+                        ) {
+                            Icon(Icons.Filled.OpenInNew, contentDescription = null, modifier = Modifier.padding(end = 6.dp))
+                            Text("Abrir fonte externa no navegador")
+                        }
+                    }
+                }
+            }
+
             items(TranslationsCatalog.all, key = { it.id }) { translation ->
-                downloadedTick // leitura para participar da recomposição
+                refreshTick // leitura para participar da recomposição
                 val isDownloaded = translation.builtIn ||
                     TranslationDownloadManager.isDownloaded(context, translation)
                 val isActive = active.id == translation.id
-                val currentProgress = progress[translation.fileName]
+                val importingThis = isImporting == translation.fileName
                 val error = errors[translation.fileName]
 
                 Card(
@@ -120,14 +184,6 @@ fun TranslationsScreen(
                             }
                         }
 
-                        if (currentProgress != null) {
-                            androidx.compose.foundation.layout.Spacer(Modifier.padding(top = 10.dp))
-                            LinearProgressIndicator(
-                                progress = currentProgress,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-
                         if (error != null) {
                             Text(
                                 error,
@@ -139,37 +195,23 @@ fun TranslationsScreen(
 
                         Column(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
                             when {
-                                !isDownloaded && currentProgress == null -> {
-                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                                        Button(onClick = {
-                                            scope.launch {
-                                                progress = progress + (translation.fileName to 0f)
-                                                errors = errors - translation.fileName
-                                                val result = TranslationDownloadManager.download(
-                                                    context,
-                                                    translation
-                                                ) { p ->
-                                                    progress = progress + (translation.fileName to p)
-                                                }
-                                                progress = progress - translation.fileName
-                                                when (result) {
-                                                    is DownloadResult.Success -> downloadedTick++
-                                                    is DownloadResult.Failure ->
-                                                        errors = errors + (translation.fileName to result.message)
-                                                }
-                                            }
-                                        }) {
-                                            Icon(Icons.Filled.CloudDownload, contentDescription = null, modifier = Modifier.padding(end = 6.dp))
-                                            Text("Baixar")
-                                        }
+                                importingThis -> {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        CircularProgressIndicator(modifier = Modifier.padding(end = 12.dp))
+                                        Text("Importando…", style = MaterialTheme.typography.labelMedium)
                                     }
                                 }
-                                currentProgress != null -> {
-                                    Text(
-                                        "Baixando… ${(currentProgress * 100).toInt()}%",
-                                        style = MaterialTheme.typography.labelMedium,
+                                !isDownloaded -> {
+                                    Button(
+                                        onClick = {
+                                            importTargetFileName = translation.fileName
+                                            importLauncher.launch(arrayOf("*/*"))
+                                        },
                                         modifier = Modifier.fillMaxWidth()
-                                    )
+                                    ) {
+                                        Icon(Icons.Filled.FileUpload, contentDescription = null, modifier = Modifier.padding(end = 6.dp))
+                                        Text("Importar arquivo")
+                                    }
                                 }
                                 isDownloaded && !isActive -> {
                                     // Botões empilhados (em vez de lado a lado) para nunca
@@ -189,12 +231,12 @@ fun TranslationsScreen(
                                         OutlinedButton(
                                             onClick = {
                                                 TranslationDownloadManager.deleteDownload(context, translation)
-                                                downloadedTick++
+                                                refreshTick++
                                             },
                                             modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                                         ) {
                                             Icon(Icons.Filled.Delete, contentDescription = null, modifier = Modifier.padding(end = 6.dp))
-                                            Text("Remover download")
+                                            Text("Remover")
                                         }
                                     }
                                 }

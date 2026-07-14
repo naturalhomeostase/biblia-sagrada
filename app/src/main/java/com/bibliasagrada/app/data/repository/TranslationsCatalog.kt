@@ -5,20 +5,15 @@ import com.bibliasagrada.app.data.model.Translation
 /**
  * Catálogo das traduções que o app conhece.
  *
- * ATENÇÃO — leia antes de publicar:
- * As URLs de download abaixo (`downloadUrl`) estão como placeholder porque este
- * app não tem acesso à internet para localizar/hospedar arquivos de tradução da
- * Bíblia (e algumas traduções, como a NVI/NVT, têm direitos autorais que exigem
- * autorização da editora para redistribuição). Para ativar de fato o download de
- * "Bíblia Fiel" e "NVLH":
- *   1. Prepare um arquivo .db (SQLite) para cada tradução, com o MESMO esquema do
- *      banco atual (tabelas `books` e `verses`, e idealmente `verses_fts` para
- *      manter a busca funcionando — veja BibleDatabaseHelper.kt).
- *   2. Hospede cada arquivo .db em algum lugar acessível por HTTPS (ex.: um
- *      repositório GitHub seu, Firebase Storage, S3, etc.).
- *   3. Substitua os valores de `downloadUrl` abaixo pelas URLs reais.
- * Sem isso, a tela de "Traduções" mostra essas opções como disponíveis, mas o
- * download falhará com uma mensagem explicando que a URL não foi configurada.
+ * A Bíblia Livre (BLIVRE) já vem embutida no app.
+ *
+ * As demais traduções (ex.: "Bíblia Fiel") NÃO são baixadas automaticamente
+ * pelo app — por questão de direitos autorais, o app não hospeda nem
+ * redistribui esses textos. Em vez disso, a tela de Traduções oferece um
+ * botão para o próprio usuário baixar o arquivo de uma fonte externa (fora
+ * do app) e depois importar esse arquivo manualmente — a responsabilidade
+ * pelo conteúdo e pelos direitos de uso é de quem faz esse download.
+ * Veja TranslationImporter.kt para o código que lê o arquivo importado.
  */
 object TranslationsCatalog {
 
@@ -33,23 +28,26 @@ object TranslationsCatalog {
 
     val FIEL = Translation(
         id = "fiel",
-        displayName = "Bíblia Fiel",
-        subtitle = "Toque para baixar",
+        displayName = "Bíblia Fiel (ACF)",
+        subtitle = "Baixe fora do app e importe aqui",
         fileName = "biblia_fiel.db",
-        downloadUrl = null, // TODO: preencha com a URL do arquivo .db da Bíblia Fiel
+        downloadUrl = null,
         builtIn = false
     )
 
     val NVLH = Translation(
         id = "nvlh",
         displayName = "NVLH",
-        subtitle = "Toque para baixar",
+        subtitle = "Baixe fora do app e importe aqui",
         fileName = "biblia_nvlh.db",
-        downloadUrl = null, // TODO: preencha com a URL do arquivo .db da NVLH
+        downloadUrl = null,
         builtIn = false
     )
 
     val all: List<Translation> = listOf(BLIVRE, FIEL, NVLH)
 
     fun byFileName(fileName: String): Translation = all.firstOrNull { it.fileName == fileName } ?: BLIVRE
+
+    /** Página onde o usuário pode baixar traduções adicionais em formato JSON, por conta própria. */
+    const val EXTERNAL_SOURCE_URL = "https://github.com/thiagobodruk/biblia"
 }

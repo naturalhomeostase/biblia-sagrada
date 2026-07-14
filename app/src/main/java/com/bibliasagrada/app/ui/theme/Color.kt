@@ -51,6 +51,31 @@ val MonoDarkSecondary = Color(0xFFBFBFBF)
 val MonoDarkOutline = Color(0xFF3D3D3D)
 
 // ======================================================================
+// Paleta "Bíblia para mulheres" — rosa antigo (dusty rose) + branco,
+// um visual clean e delicado, mantendo a seriedade de uma Bíblia.
+// ======================================================================
+
+// Rosa antigo claro
+val RoseLightBackground = Color(0xFFFFFBFB)
+val RoseLightSurface = Color(0xFFFFFBFB)
+val RoseLightSurfaceVariant = Color(0xFFF5E6E8)
+val RoseLightOnBackground = Color(0xFF3A2A2D)
+val RoseLightPrimary = Color(0xFFB76E79)
+val RoseLightOnPrimary = Color(0xFFFFFFFF)
+val RoseLightSecondary = Color(0xFF9C7A80)
+val RoseLightOutline = Color(0xFFE8D3D6)
+
+// Rosa antigo escuro
+val RoseDarkBackground = Color(0xFF1A1416)
+val RoseDarkSurface = Color(0xFF1A1416)
+val RoseDarkSurfaceVariant = Color(0xFF2E2225)
+val RoseDarkOnBackground = Color(0xFFF2E6E8)
+val RoseDarkPrimary = Color(0xFFD9A5AC)
+val RoseDarkOnPrimary = Color(0xFF3A2226)
+val RoseDarkSecondary = Color(0xFFC4989F)
+val RoseDarkOutline = Color(0xFF463539)
+
+// ======================================================================
 // Cores de marcação (highlight)
 // Modo claro: tons pastel vivos, funcionam bem sob texto escuro.
 // Modo escuro: tons mais escuros/dessaturados, para não ofuscar o texto
