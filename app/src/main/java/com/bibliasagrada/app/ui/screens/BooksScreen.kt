@@ -1,5 +1,6 @@
 package com.bibliasagrada.app.ui.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -12,12 +13,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Bookmarks
 import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
@@ -42,9 +47,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,8 +57,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bibliasagrada.app.data.model.Book
 import com.bibliasagrada.app.data.repository.BibleRepository
+import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun BooksScreen(
     repository: BibleRepository,
@@ -66,13 +72,16 @@ fun BooksScreen(
     onBookmarks: () -> Unit,
     onTranslations: () -> Unit,
     onPromises: () -> Unit,
+    onBackup: () -> Unit,
+    onHelp: () -> Unit,
     onSettings: () -> Unit,
     onAbout: () -> Unit
 ) {
+    val scope = rememberCoroutineScope()
     var books by remember { mutableStateOf<List<Book>>(emptyList()) }
     var progress by remember { mutableStateOf<Triple<Int, Int, Int>?>(null) }
     var menuExpanded by remember { mutableStateOf(false) }
-    var selectedTab by remember { mutableIntStateOf(0) }
+    val pagerState = rememberPagerState(pageCount = { 2 })
     val bookmarkedBookIds by repository.observeBookmarkedBookIds().collectAsState(initial = emptySet())
 
     LaunchedEffect(Unit) {
@@ -124,6 +133,16 @@ fun BooksScreen(
                             text = { Text("Caixinha de Promessas") },
                             leadingIcon = { Icon(Icons.Filled.AutoAwesome, null) },
                             onClick = { menuExpanded = false; onPromises() }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Encontre ajuda") },
+                            leadingIcon = { Icon(Icons.Filled.Favorite, null) },
+                            onClick = { menuExpanded = false; onHelp() }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Backup e restauração") },
+                            leadingIcon = { Icon(Icons.Filled.Backup, null) },
+                            onClick = { menuExpanded = false; onBackup() }
                         )
                         DropdownMenuItem(
                             text = { Text("Configurações") },
@@ -178,38 +197,48 @@ fun BooksScreen(
                 }
             }
 
-            TabRow(selectedTabIndex = selectedTab) {
-                Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Antigo Testamento") })
-                Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Novo Testamento") })
+            TabRow(selectedTabIndex = pagerState.currentPage) {
+                Tab(
+                    selected = pagerState.currentPage == 0,
+                    onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
+                    text = { Text("Antigo Testamento") }
+                )
+                Tab(
+                    selected = pagerState.currentPage == 1,
+                    onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
+                    text = { Text("Novo Testamento") }
+                )
             }
 
-            val filtered = books.filter { it.testament == if (selectedTab == 0) "AT" else "NT" }
-            LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
-                items(filtered) { book ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onOpenBook(book.id) }
-                            .padding(horizontal = 20.dp, vertical = 14.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(book.name, style = MaterialTheme.typography.bodyLarge.copy(fontSize = 17.sp))
-                            if (bookmarkedBookIds.contains(book.id)) {
-                                Icon(
-                                    Icons.Filled.Bookmark,
-                                    contentDescription = "Tem marcador",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(start = 6.dp).size(16.dp)
-                                )
+            HorizontalPager(state = pagerState, modifier = Modifier.weight(1f)) { page ->
+                val filtered = books.filter { it.testament == if (page == 0) "AT" else "NT" }
+                LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
+                    items(filtered) { book ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onOpenBook(book.id) }
+                                .padding(horizontal = 20.dp, vertical = 14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(book.name, style = MaterialTheme.typography.bodyLarge.copy(fontSize = 17.sp))
+                                if (bookmarkedBookIds.contains(book.id)) {
+                                    Icon(
+                                        Icons.Filled.Bookmark,
+                                        contentDescription = "Tem marcador",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(start = 6.dp).size(16.dp)
+                                    )
+                                }
                             }
+                            Text(
+                                "${book.chapterCount} cap.",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
                         }
-                        Text(
-                            "${book.chapterCount} cap.",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.secondary
-                        )
                     }
                 }
             }

@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.FormatColorReset
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -50,6 +51,7 @@ fun VerseActionSheet(
     currentNote: String,
     onCopy: () -> Unit,
     onShare: () -> Unit,
+    onShareImage: () -> Unit,
     onToggleFavorite: () -> Unit,
     onSetHighlight: (String?) -> Unit,
     onSaveNote: (String) -> Unit,
@@ -85,6 +87,7 @@ fun VerseActionSheet(
         ) {
             ActionIcon(Icons.Filled.ContentCopy, "Copiar", onClick = onCopy)
             ActionIcon(Icons.Filled.Share, "Compartilhar", onClick = onShare)
+            ActionIcon(Icons.Filled.Image, "Como imagem", onClick = onShareImage)
             ActionIcon(
                 if (isFavorite) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder,
                 "Favorito",

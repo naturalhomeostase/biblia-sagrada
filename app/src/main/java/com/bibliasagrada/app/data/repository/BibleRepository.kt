@@ -26,7 +26,7 @@ import kotlinx.coroutines.withContext
 
 class BibleRepository(private val appContext: Context) {
 
-    private val userDb = UserDataDatabase.getInstance(appContext)
+    private var userDb = UserDataDatabase.getInstance(appContext)
     val prefs = PreferencesManager(appContext)
 
     private val initialTranslation: Translation = runBlocking {
@@ -170,5 +170,22 @@ class BibleRepository(private val appContext: Context) {
             instance ?: synchronized(this) {
                 instance ?: BibleRepository(context.applicationContext).also { instance = it }
             }
+    }
+
+    // --- Backup e restauração (ver util/BackupManager.kt) ---
+
+    /** Garante que tudo que foi escrito recentemente já está no arquivo principal do banco (não só no WAL), antes de copiar para o backup. */
+    suspend fun checkpointUserDatabaseForBackup() = withContext(Dispatchers.IO) {
+        userDb.openHelper.writableDatabase.execSQL("PRAGMA wal_checkpoint(FULL)")
+    }
+
+    /** Fecha a conexão com o banco do usuário — necessário antes de sobrescrever o arquivo ao restaurar um backup. */
+    fun closeUserDatabaseForRestore() {
+        UserDataDatabase.closeAndReset()
+    }
+
+    /** Reabre o banco do usuário depois que o arquivo foi substituído (ou se a restauração falhar). */
+    fun reopenUserDatabaseAfterRestore() {
+        userDb = UserDataDatabase.getInstance(appContext)
     }
 }

@@ -40,5 +40,13 @@ abstract class UserDataDatabase : RoomDatabase() {
                     .fallbackToDestructiveMigration()
                     .build().also { instance = it }
             }
+
+        /** Fecha a conexão atual e limpa o singleton — usado antes de restaurar um backup. */
+        fun closeAndReset() {
+            synchronized(this) {
+                instance?.close()
+                instance = null
+            }
+        }
     }
 }

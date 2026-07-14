@@ -8,10 +8,12 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.bibliasagrada.app.data.repository.BibleRepository
 import com.bibliasagrada.app.ui.screens.AboutScreen
+import com.bibliasagrada.app.ui.screens.BackupScreen
 import com.bibliasagrada.app.ui.screens.BookmarksScreen
 import com.bibliasagrada.app.ui.screens.BooksScreen
 import com.bibliasagrada.app.ui.screens.ChaptersScreen
 import com.bibliasagrada.app.ui.screens.FavoritesScreen
+import com.bibliasagrada.app.ui.screens.HelpScreen
 import com.bibliasagrada.app.ui.screens.HistoryScreen
 import com.bibliasagrada.app.ui.screens.NotesScreen
 import com.bibliasagrada.app.ui.screens.PromisesScreen
@@ -39,6 +41,8 @@ fun AppNavGraph(repository: BibleRepository) {
                 onBookmarks = { navController.navigate(Routes.BOOKMARKS) },
                 onTranslations = { navController.navigate(Routes.TRANSLATIONS) },
                 onPromises = { navController.navigate(Routes.PROMISES) },
+                onBackup = { navController.navigate(Routes.BACKUP) },
+                onHelp = { navController.navigate(Routes.HELP) },
                 onSettings = { navController.navigate(Routes.SETTINGS) },
                 onAbout = { navController.navigate(Routes.ABOUT) }
             )
@@ -135,6 +139,28 @@ fun AppNavGraph(repository: BibleRepository) {
         }
         composable(Routes.PROMISES) {
             PromisesScreen(
+                repository = repository,
+                onBack = { navController.popBackStack() },
+                onOpenReader = { bookId, chapter, verse ->
+                    navController.navigate(Routes.reader(bookId, chapter, verse))
+                }
+            )
+        }
+        composable(Routes.BACKUP) {
+            BackupScreen(
+                repository = repository,
+                onBack = { navController.popBackStack() },
+                onRestored = {
+                    // Depois de restaurar, reinicia toda a navegação para que
+                    // as telas recarreguem favoritos/notas/marcadores do novo banco.
+                    navController.navigate(Routes.BOOKS) {
+                        popUpTo(0)
+                    }
+                }
+            )
+        }
+        composable(Routes.HELP) {
+            HelpScreen(
                 repository = repository,
                 onBack = { navController.popBackStack() },
                 onOpenReader = { bookId, chapter, verse ->

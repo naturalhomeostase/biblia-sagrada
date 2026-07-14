@@ -1,6 +1,7 @@
 package com.bibliasagrada.app.data.repository
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -25,6 +26,7 @@ class PreferencesManager(private val context: Context) {
         val LAST_BOOK = intPreferencesKey("last_book")
         val LAST_CHAPTER = intPreferencesKey("last_chapter")
         val ACTIVE_TRANSLATION = stringPreferencesKey("active_translation")
+        val PAGE_TURN_SOUND = booleanPreferencesKey("page_turn_sound")
     }
 
     val fontScale: Flow<Float> = context.dataStore.data.map { it[FONT_SCALE] ?: 1.0f }
@@ -37,6 +39,10 @@ class PreferencesManager(private val context: Context) {
     /** Nome do arquivo .db da tradução ativa (ex.: "biblia.db"). */
     val activeTranslationFileName: Flow<String> = context.dataStore.data.map {
         it[ACTIVE_TRANSLATION] ?: "biblia.db"
+    }
+    /** Se o som de "página virando" deve tocar ao trocar de capítulo. Ligado por padrão. */
+    val pageTurnSoundEnabled: Flow<Boolean> = context.dataStore.data.map {
+        it[PAGE_TURN_SOUND] ?: true
     }
 
     suspend fun setFontScale(scale: Float) {
@@ -53,5 +59,9 @@ class PreferencesManager(private val context: Context) {
 
     suspend fun setActiveTranslationFileName(fileName: String) {
         context.dataStore.edit { it[ACTIVE_TRANSLATION] = fileName }
+    }
+
+    suspend fun setPageTurnSoundEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[PAGE_TURN_SOUND] = enabled }
     }
 }

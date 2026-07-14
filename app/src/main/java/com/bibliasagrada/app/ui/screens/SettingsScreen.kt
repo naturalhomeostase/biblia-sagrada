@@ -14,6 +14,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -40,6 +41,7 @@ fun SettingsScreen(
     val fontScale by repository.prefs.fontScale.collectAsState(initial = 1.0f)
     val themeMode by repository.prefs.themeMode.collectAsState(initial = ThemeMode.SISTEMA)
     val colorPalette by repository.prefs.colorPalette.collectAsState(initial = ColorPalette.DOURADO)
+    val soundEnabled by repository.prefs.pageTurnSoundEnabled.collectAsState(initial = true)
 
     Scaffold(
         topBar = {
@@ -84,6 +86,19 @@ fun SettingsScreen(
             }
             PaletteOption("Preto e branco (clássico)", ColorPalette.PRETO_BRANCO, colorPalette) {
                 scope.launch { repository.prefs.setColorPalette(it) }
+            }
+
+            Text("Leitura", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 24.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Som ao virar a página")
+                Switch(
+                    checked = soundEnabled,
+                    onCheckedChange = { scope.launch { repository.prefs.setPageTurnSoundEnabled(it) } }
+                )
             }
         }
     }

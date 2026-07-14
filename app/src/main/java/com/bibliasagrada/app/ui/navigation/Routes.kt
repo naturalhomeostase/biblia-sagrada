@@ -13,6 +13,8 @@ object Routes {
     const val BOOKMARKS = "bookmarks"
     const val TRANSLATIONS = "translations"
     const val PROMISES = "promises"
+    const val BACKUP = "backup"
+    const val HELP = "help"
 
     fun chapters(bookId: Int) = "chapters/$bookId"
     fun reader(bookId: Int, chapter: Int, verse: Int = 0) = "reader/$bookId/$chapter/$verse"

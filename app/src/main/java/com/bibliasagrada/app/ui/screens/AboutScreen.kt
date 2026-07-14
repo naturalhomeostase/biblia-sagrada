@@ -57,6 +57,7 @@ private val ESSENTIAL_FEATURES = listOf(
     "Compartilhar e copiar versículos",
     "Marcação com cores e notas pessoais",
     "Marcadores nomeados de página, com fita indicando o capítulo salvo",
+    "Encontre ajuda: passagens organizadas por situações e sentimentos do dia a dia",
     "Múltiplas traduções da Bíblia",
     "Navegação por gesto entre capítulos"
 )

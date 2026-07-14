@@ -1,9 +1,12 @@
 package com.bibliasagrada.app.ui.screens
 
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.SoundPool
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -28,8 +31,11 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -38,11 +44,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -52,13 +60,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
+import com.bibliasagrada.app.R
 import com.bibliasagrada.app.data.model.ChapterRef
 import com.bibliasagrada.app.data.model.Verse
 import com.bibliasagrada.app.data.repository.BibleRepository
@@ -66,10 +74,22 @@ import com.bibliasagrada.app.data.room.NoteEntity
 import com.bibliasagrada.app.ui.components.VerseActionSheet
 import com.bibliasagrada.app.ui.theme.LocalHighlightColors
 import com.bibliasagrada.app.ui.theme.readingTextStyle
+import com.bibliasagrada.app.util.QuoteImageGenerator
 import kotlinx.coroutines.launch
 
 private const val MIN_FONT_SCALE = 0.7f
 private const val MAX_FONT_SCALE = 1.8f
+
+private fun shareVersesAsImage(context: android.content.Context, verses: List<Verse>) {
+    if (verses.isEmpty()) return
+    val uri = QuoteImageGenerator.generateAndShare(context, verses)
+    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+        type = "image/png"
+        putExtra(Intent.EXTRA_STREAM, uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    context.startActivity(Intent.createChooser(sendIntent, null))
+}
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -87,6 +107,27 @@ fun ReaderScreen(
     var chapterRefs by remember { mutableStateOf<List<ChapterRef>>(emptyList()) }
     var startPage by remember { mutableStateOf<Int?>(null) }
     val fontScale by repository.prefs.fontScale.collectAsState(initial = 1.0f)
+    val soundEnabled by repository.prefs.pageTurnSoundEnabled.collectAsState(initial = true)
+
+    // Som de "página virando" — carregado uma vez e liberado ao sair da tela.
+    val soundPool = remember {
+        SoundPool.Builder()
+            .setMaxStreams(1)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+            )
+            .build()
+    }
+    var pageTurnSoundId by remember { mutableStateOf(0) }
+    LaunchedEffect(Unit) {
+        pageTurnSoundId = soundPool.load(context, R.raw.page_turn, 1)
+    }
+    DisposableEffect(Unit) {
+        onDispose { soundPool.release() }
+    }
 
     LaunchedEffect(Unit) {
         val refs = repository.getAllChapterRefs()
@@ -105,6 +146,7 @@ fun ReaderScreen(
     val pagerState = rememberPagerState(initialPage = startPageValue) { chapterRefs.size }
     var selectedVerse by remember { mutableStateOf<Verse?>(null) }
     var showBookmarkDialog by remember { mutableStateOf(false) }
+    var previousPage by remember { mutableStateOf(startPageValue) }
 
     val currentRef = chapterRefs.getOrNull(pagerState.currentPage)
     val bookmarksInChapter by remember(currentRef) {
@@ -183,7 +225,8 @@ fun ReaderScreen(
                     onVerseClick = { verse -> selectedVerse = verse },
                     onFontScaleChange = { newScale ->
                         scope.launch { repository.prefs.setFontScale(newScale.coerceIn(MIN_FONT_SCALE, MAX_FONT_SCALE)) }
-                    }
+                    },
+                    onShareVerses = { verses -> shareVersesAsImage(context, verses) }
                 )
             }
 
@@ -227,11 +270,18 @@ fun ReaderScreen(
         }
     }
 
-    // Registra histórico e progresso de leitura sempre que o capítulo exibido mudar
+    // Registra histórico/progresso e toca o som de página virando sempre que
+    // o capítulo exibido mudar de verdade (não na primeira composição).
     LaunchedEffect(pagerState.currentPage, chapterRefs) {
         val ref = chapterRefs.getOrNull(pagerState.currentPage) ?: return@LaunchedEffect
         repository.recordHistory(ref.bookId, ref.chapter)
         repository.saveReadingProgress(ref.bookId, ref.chapter, 1)
+        if (pagerState.currentPage != previousPage) {
+            if (soundEnabled && pageTurnSoundId != 0) {
+                soundPool.play(pageTurnSoundId, 0.6f, 0.6f, 1, 0, 1f)
+            }
+            previousPage = pagerState.currentPage
+        }
     }
 
     if (showBookmarkDialog && currentRef != null) {
@@ -279,6 +329,7 @@ fun ReaderScreen(
                     }
                     context.startActivity(Intent.createChooser(sendIntent, null))
                 },
+                onShareImage = { shareVersesAsImage(context, listOf(verse)) },
                 onToggleFavorite = {
                     scope.launch {
                         repository.toggleFavorite(verse.bookId, verse.chapter, verse.verse)
@@ -376,6 +427,41 @@ private fun BookmarkRibbon(modifier: Modifier = Modifier) {
     }
 }
 
+/** Barra flutuante que aparece quando um ou mais versículos estão selecionados. */
+@Composable
+private fun SelectionBar(
+    count: Int,
+    onCancel: () -> Unit,
+    onShare: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.padding(16.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shadowElevation = 6.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onCancel) {
+                Icon(Icons.Filled.Close, contentDescription = "Cancelar seleção")
+            }
+            Text(
+                if (count == 1) "1 versículo selecionado" else "$count versículos selecionados",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(horizontal = 4.dp)
+            )
+            Button(onClick = onShare, modifier = Modifier.padding(start = 8.dp)) {
+                Icon(Icons.Filled.Image, contentDescription = null, modifier = Modifier.padding(end = 6.dp))
+                Text("Compartilhar")
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ChapterPage(
     repository: BibleRepository,
@@ -383,7 +469,8 @@ private fun ChapterPage(
     fontScale: Float,
     scrollToVerse: Int?,
     onVerseClick: (Verse) -> Unit,
-    onFontScaleChange: (Float) -> Unit
+    onFontScaleChange: (Float) -> Unit,
+    onShareVerses: (List<Verse>) -> Unit
 ) {
     var verses by remember(ref) { mutableStateOf<List<Verse>>(emptyList()) }
     val highlights by remember(ref) { repository.observeHighlightsForChapter(ref.bookId, ref.chapter) }
@@ -396,6 +483,10 @@ private fun ChapterPage(
     // Fonte "ao vivo": muda instantaneamente durante o gesto de pinça, e só é
     // salva de verdade (via onFontScaleChange) quando o usuário solta os dedos.
     var liveFontScale by remember(fontScale) { mutableStateOf(fontScale) }
+
+    // Seleção de vários versículos (toque e segure para começar), para
+    // compartilhar um trecho maior que um único versículo como imagem.
+    var selectedNumbers by remember(ref) { mutableStateOf(setOf<Int>()) }
 
     LaunchedEffect(ref) {
         verses = repository.getChapter(ref.bookId, ref.chapter)
@@ -453,14 +544,39 @@ private fun ChapterPage(
             items(verses, key = { it.id }) { verse ->
                 val highlightColorName = highlightMap[verse.verse]?.color
                 val bgColor: Color? = highlightColorName?.let { highlightColors[it] }
+                val isSelected = selectedNumbers.contains(verse.verse)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onVerseClick(verse) }
+                        .combinedClickable(
+                            onClick = {
+                                if (selectedNumbers.isNotEmpty()) {
+                                    selectedNumbers = if (isSelected) {
+                                        selectedNumbers - verse.verse
+                                    } else if (selectedNumbers.size < QuoteImageGenerator.MAX_VERSES_PER_IMAGE) {
+                                        selectedNumbers + verse.verse
+                                    } else {
+                                        selectedNumbers
+                                    }
+                                } else {
+                                    onVerseClick(verse)
+                                }
+                            },
+                            onLongClick = {
+                                if (selectedNumbers.size < QuoteImageGenerator.MAX_VERSES_PER_IMAGE) {
+                                    selectedNumbers = selectedNumbers + verse.verse
+                                }
+                            }
+                        )
                         .then(
-                            if (bgColor != null)
-                                Modifier.background(bgColor, RoundedCornerShape(4.dp))
-                            else Modifier
+                            when {
+                                isSelected -> Modifier.background(
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.20f),
+                                    RoundedCornerShape(4.dp)
+                                )
+                                bgColor != null -> Modifier.background(bgColor, RoundedCornerShape(4.dp))
+                                else -> Modifier
+                            }
                         )
                         .padding(vertical = 4.dp, horizontal = 4.dp)
                 ) {
@@ -477,8 +593,22 @@ private fun ChapterPage(
             }
         }
 
-        if (bookmarks.isNotEmpty()) {
+        if (bookmarks.isNotEmpty() && selectedNumbers.isEmpty()) {
             BookmarkRibbon(modifier = Modifier.align(Alignment.TopEnd))
+        }
+
+        if (selectedNumbers.isNotEmpty()) {
+            SelectionBar(
+                count = selectedNumbers.size,
+                onCancel = { selectedNumbers = emptySet() },
+                onShare = {
+                    val chosen = verses.filter { selectedNumbers.contains(it.verse) }
+                        .sortedBy { it.verse }
+                    onShareVerses(chosen)
+                    selectedNumbers = emptySet()
+                },
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
         }
     }
 }
