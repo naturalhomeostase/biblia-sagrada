@@ -71,7 +71,7 @@ fun TranslationsScreen(
     var importTargetFileName by remember { mutableStateOf<String?>(null) }
 
     val importLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
+        ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         val targetFileName = importTargetFileName
         if (uri != null && targetFileName != null) {
@@ -205,7 +205,7 @@ fun TranslationsScreen(
                                     Button(
                                         onClick = {
                                             importTargetFileName = translation.fileName
-                                            importLauncher.launch(arrayOf("*/*"))
+                                            importLauncher.launch("*/*")
                                         },
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
