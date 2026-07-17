@@ -1,8 +1,15 @@
 package com.bibliasagrada.app.ui.screens
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.SoundPool
+import android.os.Build
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -34,17 +41,22 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
@@ -62,6 +74,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -72,6 +85,7 @@ import com.bibliasagrada.app.data.model.ChapterRef
 import com.bibliasagrada.app.data.model.Verse
 import com.bibliasagrada.app.data.repository.BibleRepository
 import com.bibliasagrada.app.data.repository.ColorPalette
+import com.bibliasagrada.app.data.repository.ThemeMode
 import com.bibliasagrada.app.data.room.NoteEntity
 import com.bibliasagrada.app.ui.components.VerseActionSheet
 import com.bibliasagrada.app.ui.theme.LocalColorPalette
@@ -83,15 +97,29 @@ import kotlinx.coroutines.launch
 private const val MIN_FONT_SCALE = 0.7f
 private const val MAX_FONT_SCALE = 1.8f
 
-private fun shareVersesAsImage(context: android.content.Context, verses: List<Verse>) {
+private fun shareVersesAsImage(context: android.content.Context, verses: List<Verse>, theme: QuoteImageGenerator.Theme) {
     if (verses.isEmpty()) return
-    val uri = QuoteImageGenerator.generateAndShare(context, verses)
+    val uri = QuoteImageGenerator.generateAndShare(context, verses, theme)
     val sendIntent = Intent(Intent.ACTION_SEND).apply {
         type = "image/png"
         putExtra(Intent.EXTRA_STREAM, uri)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     context.startActivity(Intent.createChooser(sendIntent, null))
+}
+
+/** Lê as cores do tema atual (dourado/preto e branco/rosé, claro/escuro) para
+ *  a imagem de citação sair com a mesma cara do app no momento em que a
+ *  pessoa compartilha. */
+@Composable
+private fun currentQuoteImageTheme(): QuoteImageGenerator.Theme {
+    val colorScheme = MaterialTheme.colorScheme
+    return QuoteImageGenerator.Theme(
+        background = colorScheme.background.toArgb(),
+        accent = colorScheme.primary.toArgb(),
+        text = colorScheme.onBackground.toArgb(),
+        footer = colorScheme.secondary.toArgb()
+    )
 }
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
@@ -106,6 +134,44 @@ fun ReaderScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
+    val quoteImageTheme = currentQuoteImageTheme()
+
+    // Pedido de permissão só é necessário no Android 9 ou anterior — a
+    // partir do Android 10 (scoped storage), salvar na galeria não exige
+    // permissão nenhuma.
+    var pendingSaveVerses by remember { mutableStateOf<List<Verse>?>(null) }
+    val storagePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        val verses = pendingSaveVerses
+        pendingSaveVerses = null
+        if (granted && verses != null) {
+            val ok = QuoteImageGenerator.saveToGallery(context, verses, quoteImageTheme)
+            Toast.makeText(
+                context,
+                if (ok) "Imagem salva na galeria" else "Não foi possível salvar a imagem",
+                Toast.LENGTH_SHORT
+            ).show()
+        } else if (!granted) {
+            Toast.makeText(context, "Permissão necessária para salvar na galeria", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun saveVerseImage(verses: List<Verse>) {
+        val needsPermission = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
+        if (needsPermission) {
+            pendingSaveVerses = verses
+            storagePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        } else {
+            val ok = QuoteImageGenerator.saveToGallery(context, verses, quoteImageTheme)
+            Toast.makeText(
+                context,
+                if (ok) "Imagem salva na galeria" else "Não foi possível salvar a imagem",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
 
     var chapterRefs by remember { mutableStateOf<List<ChapterRef>>(emptyList()) }
     var startPage by remember { mutableStateOf<Int?>(null) }
@@ -149,6 +215,7 @@ fun ReaderScreen(
     val pagerState = rememberPagerState(initialPage = startPageValue) { chapterRefs.size }
     var selectedVerse by remember { mutableStateOf<Verse?>(null) }
     var showBookmarkDialog by remember { mutableStateOf(false) }
+    var showQuickSettings by remember { mutableStateOf(false) }
     var previousPage by remember { mutableStateOf(startPageValue) }
 
     val currentRef = chapterRefs.getOrNull(pagerState.currentPage)
@@ -218,17 +285,12 @@ fun ReaderScreen(
                                 contentDescription = if (isChapterBookmarked) "Remover marcador" else "Marcar esta página"
                             )
                         }
-                        IconButton(
-                            onClick = { changeFontScale(-0.1f) },
-                            enabled = fontScale > MIN_FONT_SCALE
-                        ) {
-                            Icon(Icons.Filled.Remove, contentDescription = "Diminuir fonte")
-                        }
-                        IconButton(
-                            onClick = { changeFontScale(0.1f) },
-                            enabled = fontScale < MAX_FONT_SCALE
-                        ) {
-                            Icon(Icons.Filled.Add, contentDescription = "Aumentar fonte")
+                        IconButton(onClick = { showQuickSettings = true }) {
+                            Text(
+                                "A",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = LocalContentColor.current
+                            )
                         }
                     }
                 )
@@ -250,7 +312,7 @@ fun ReaderScreen(
                     onFontScaleChange = { newScale ->
                         scope.launch { repository.prefs.setFontScale(newScale.coerceIn(MIN_FONT_SCALE, MAX_FONT_SCALE)) }
                     },
-                    onShareVerses = { verses -> shareVersesAsImage(context, verses) }
+                    onShareVerses = { verses -> shareVersesAsImage(context, verses, quoteImageTheme) }
                 )
             }
 
@@ -302,9 +364,16 @@ fun ReaderScreen(
         repository.saveReadingProgress(ref.bookId, ref.chapter, 1)
         if (pagerState.currentPage != previousPage) {
             if (soundEnabled && pageTurnSoundId != 0) {
-                soundPool.play(pageTurnSoundId, 0.35f, 0.35f, 1, 0, 1f)
+                soundPool.play(pageTurnSoundId, 0.22f, 0.22f, 1, 0, 0.95f)
             }
             previousPage = pagerState.currentPage
+        }
+    }
+
+    if (showQuickSettings) {
+        val sheetState = rememberModalBottomSheetState()
+        ModalBottomSheet(onDismissRequest = { showQuickSettings = false }, sheetState = sheetState) {
+            QuickSettingsSheet(repository = repository, fontScale = fontScale)
         }
     }
 
@@ -313,8 +382,8 @@ fun ReaderScreen(
             isBookmarked = isChapterBookmarked,
             existingNames = bookmarksInChapter.map { it.name },
             onDismiss = { showBookmarkDialog = false },
-            onSave = { name ->
-                scope.launch { repository.addBookmark(currentRef.bookId, currentRef.chapter, name) }
+            onSave = { name, color ->
+                scope.launch { repository.addBookmark(currentRef.bookId, currentRef.chapter, name, color) }
                 showBookmarkDialog = false
             },
             onRemoveAll = {
@@ -333,6 +402,7 @@ fun ReaderScreen(
 
         LaunchedEffect(verse) {
             isFavorite = repository.isFavorite(verse.bookId, verse.chapter, verse.verse)
+            highlight = repository.getHighlightForVerse(verse.bookId, verse.chapter, verse.verse)
             existingNote = repository.getNoteForVerse(verse.bookId, verse.chapter, verse.verse)
             noteText = existingNote?.text ?: ""
         }
@@ -353,7 +423,8 @@ fun ReaderScreen(
                     }
                     context.startActivity(Intent.createChooser(sendIntent, null))
                 },
-                onShareImage = { shareVersesAsImage(context, listOf(verse)) },
+                onShareImage = { shareVersesAsImage(context, listOf(verse), quoteImageTheme) },
+                onSaveImage = { saveVerseImage(listOf(verse)) },
                 onToggleFavorite = {
                     scope.launch {
                         repository.toggleFavorite(verse.bookId, verse.chapter, verse.verse)
@@ -375,16 +446,19 @@ fun ReaderScreen(
     }
 }
 
-/** Diálogo para nomear um novo marcador de página, ou remover os marcadores do capítulo atual. */
+/** Diálogo para nomear (opcionalmente) um novo marcador de página e escolher
+ *  uma cor, ou remover os marcadores do capítulo atual. */
 @Composable
 private fun BookmarkDialog(
     isBookmarked: Boolean,
     existingNames: List<String>,
     onDismiss: () -> Unit,
-    onSave: (String) -> Unit,
+    onSave: (String, String?) -> Unit,
     onRemoveAll: () -> Unit
 ) {
     var name by remember { mutableStateOf("") }
+    var selectedColor by remember { mutableStateOf<String?>(null) }
+    val highlightColors = LocalHighlightColors.current
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -397,29 +471,45 @@ private fun BookmarkDialog(
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Text(
-                        "Você pode adicionar outro nome, ou remover todos os marcadores deste capítulo.",
+                        "Você pode adicionar outro marcador, ou remover todos os deste capítulo.",
                         style = MaterialTheme.typography.labelMedium,
                         modifier = Modifier.padding(top = 8.dp)
                     )
                 } else {
                     Text(
-                        "Dê um nome a este marcador para lembrar por que você salvou esta página.",
+                        "Dar um nome é opcional — ajuda a lembrar por que você salvou esta página.",
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    placeholder = { Text("Ex.: Estudo de domingo") },
+                    placeholder = { Text("Nome (opcional)") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
                 )
+                Text(
+                    "Cor do marcador (opcional)",
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(top = 14.dp, bottom = 6.dp)
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    highlightColors.forEach { (colorName, color) ->
+                        val isSelected = selectedColor == colorName
+                        Box(
+                            modifier = Modifier
+                                .padding(end = 10.dp)
+                                .size(if (isSelected) 32.dp else 26.dp)
+                                .background(color, androidx.compose.foundation.shape.CircleShape)
+                                .clickable { selectedColor = if (isSelected) null else colorName }
+                        )
+                    }
+                }
             }
         },
         confirmButton = {
             TextButton(
-                enabled = name.isNotBlank(),
-                onClick = { onSave(name.trim()) }
+                onClick = { onSave(name.trim(), selectedColor) }
             ) { Text("Salvar marcador") }
         },
         dismissButton = {
@@ -434,7 +524,7 @@ private fun BookmarkDialog(
 
 /** Pequena fita no canto superior indicando que esta página tem um marcador salvo. */
 @Composable
-private fun BookmarkRibbon(modifier: Modifier = Modifier) {
+private fun BookmarkRibbon(tint: Color, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .padding(top = 4.dp, end = 12.dp)
@@ -445,7 +535,7 @@ private fun BookmarkRibbon(modifier: Modifier = Modifier) {
         Icon(
             Icons.Filled.Bookmark,
             contentDescription = "Página marcada",
-            tint = MaterialTheme.colorScheme.primary,
+            tint = tint,
             modifier = Modifier.size(22.dp)
         )
     }
@@ -593,14 +683,10 @@ private fun ChapterPage(
                             }
                         )
                         .then(
-                            when {
-                                isSelected -> Modifier.background(
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.20f),
-                                    RoundedCornerShape(4.dp)
-                                )
-                                bgColor != null -> Modifier.background(bgColor, RoundedCornerShape(4.dp))
-                                else -> Modifier
-                            }
+                            if (isSelected) Modifier.background(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.20f),
+                                RoundedCornerShape(4.dp)
+                            ) else Modifier
                         )
                         .padding(vertical = 4.dp, horizontal = 4.dp)
                 ) {
@@ -611,14 +697,26 @@ private fun ChapterPage(
                     )
                     Text(
                         text = verse.text,
-                        style = readingTextStyle(liveFontScale)
+                        style = readingTextStyle(liveFontScale),
+                        modifier = if (bgColor != null && !isSelected) {
+                            Modifier.background(bgColor, RoundedCornerShape(3.dp))
+                        } else {
+                            Modifier
+                        }
                     )
                 }
             }
         }
 
         if (bookmarks.isNotEmpty() && selectedNumbers.isEmpty()) {
-            BookmarkRibbon(modifier = Modifier.align(Alignment.TopEnd))
+            BookmarkRibbon(
+                tint = if (bookmarks.map { it.color }.distinct().size == 1) {
+                    bookmarks.first().color?.let { highlightColors[it] } ?: MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.primary
+                },
+                modifier = Modifier.align(Alignment.TopEnd)
+            )
         }
 
         if (selectedNumbers.isNotEmpty()) {
@@ -634,5 +732,78 @@ private fun ChapterPage(
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
+    }
+}
+
+/** Painel rápido de acesso: tema, tamanho de fonte e som — sem precisar sair da leitura. */
+@Composable
+private fun QuickSettingsSheet(repository: BibleRepository, fontScale: Float) {
+    val scope = rememberCoroutineScope()
+    val themeMode by repository.prefs.themeMode.collectAsState(initial = ThemeMode.SISTEMA)
+    val colorPalette by repository.prefs.colorPalette.collectAsState(initial = ColorPalette.DOURADO)
+    val soundEnabled by repository.prefs.pageTurnSoundEnabled.collectAsState(initial = true)
+
+    Column(modifier = Modifier.fillMaxWidth().padding(20.dp)) {
+        Text("Tamanho da fonte", style = MaterialTheme.typography.titleMedium)
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+            Text("A", style = MaterialTheme.typography.labelMedium)
+            Slider(
+                value = fontScale,
+                onValueChange = { scope.launch { repository.prefs.setFontScale(it) } },
+                valueRange = MIN_FONT_SCALE..MAX_FONT_SCALE,
+                modifier = Modifier.weight(1f).padding(horizontal = 10.dp)
+            )
+            Text("A", style = MaterialTheme.typography.titleLarge)
+        }
+
+        Text("Modo", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 20.dp))
+        QuickThemeOption("Claro", ThemeMode.CLARO, themeMode) { scope.launch { repository.prefs.setThemeMode(it) } }
+        QuickThemeOption("Escuro", ThemeMode.ESCURO, themeMode) { scope.launch { repository.prefs.setThemeMode(it) } }
+        QuickThemeOption("Seguir o sistema", ThemeMode.SISTEMA, themeMode) { scope.launch { repository.prefs.setThemeMode(it) } }
+
+        Text("Cor do tema", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 20.dp))
+        QuickPaletteOption("Dourado", ColorPalette.DOURADO, colorPalette) { scope.launch { repository.prefs.setColorPalette(it) } }
+        QuickPaletteOption("Preto e branco", ColorPalette.PRETO_BRANCO, colorPalette) { scope.launch { repository.prefs.setColorPalette(it) } }
+        QuickPaletteOption("Bíblia para mulheres (rosé)", ColorPalette.ROSA, colorPalette) { scope.launch { repository.prefs.setColorPalette(it) } }
+
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Som ao virar a página", style = MaterialTheme.typography.titleMedium)
+            Switch(
+                checked = soundEnabled,
+                onCheckedChange = { scope.launch { repository.prefs.setPageTurnSoundEnabled(it) } }
+            )
+        }
+    }
+}
+
+@Composable
+private fun QuickThemeOption(label: String, mode: ThemeMode, current: ThemeMode, onSelect: (ThemeMode) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .selectable(selected = current == mode, onClick = { onSelect(mode) })
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(selected = current == mode, onClick = { onSelect(mode) })
+        Text(label, modifier = Modifier.padding(start = 8.dp))
+    }
+}
+
+@Composable
+private fun QuickPaletteOption(label: String, palette: ColorPalette, current: ColorPalette, onSelect: (ColorPalette) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .selectable(selected = current == palette, onClick = { onSelect(palette) })
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(selected = current == palette, onClick = { onSelect(palette) })
+        Text(label, modifier = Modifier.padding(start = 8.dp))
     }
 }

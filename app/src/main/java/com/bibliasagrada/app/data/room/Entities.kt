@@ -43,6 +43,8 @@ data class BookmarkEntity(
     val bookId: Int,
     val chapter: Int,
     val name: String,
+    /** Nome da cor (mesma paleta usada nos destaques de versículo), ou null = cor padrão do tema. */
+    val color: String? = null,
     val createdAt: Long = System.currentTimeMillis()
 )
 

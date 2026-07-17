@@ -82,19 +82,21 @@ val RoseDarkOutline = Color(0xFF463539)
 // claro nem "brigar" com ele — mantêm boa legibilidade em fundo escuro.
 // ======================================================================
 
-// Marcação — modo claro (vivas, como antes)
-val HighlightAmareloLight = Color(0xFFFFE082)
-val HighlightAzulLight = Color(0xFFA8D8FF)
-val HighlightVerdeLight = Color(0xFFB9E4C9)
-val HighlightVermelhoLight = Color(0xFFFFB3AE)
-val HighlightRoxoLight = Color(0xFFDCC1F2)
+// Marcação — modo claro: tons vivos e ao mesmo tempo suaves (pastel), com
+// transparência para não atrapalhar a leitura do texto por baixo.
+val HighlightAmareloLight = Color(0xA6FFCA28)
+val HighlightAzulLight = Color(0xA664B5F6)
+val HighlightVerdeLight = Color(0xA681C784)
+val HighlightVermelhoLight = Color(0xA6EF7B7B)
+val HighlightRoxoLight = Color(0xA6CE93D8)
 
-// Marcação — modo escuro (tonalidades escurecidas/dessaturadas)
-val HighlightAmareloDark = Color(0xFF5C4A1E)
-val HighlightAzulDark = Color(0xFF264A5C)
-val HighlightVerdeDark = Color(0xFF2C4A38)
-val HighlightVermelhoDark = Color(0xFF5C2E2C)
-val HighlightRoxoDark = Color(0xFF3E2E4F)
+// Marcação — modo escuro: mesmas tonalidades, um pouco mais contidas e
+// também transparentes, para conviverem bem com o texto claro por cima.
+val HighlightAmareloDark = Color(0x80FBC02D)
+val HighlightAzulDark = Color(0x804FA8E0)
+val HighlightVerdeDark = Color(0x8066BB6A)
+val HighlightVermelhoDark = Color(0x80E57373)
+val HighlightRoxoDark = Color(0x80AB79C4)
 
 val LightHighlightColors = mapOf(
     "amarelo" to HighlightAmareloLight,

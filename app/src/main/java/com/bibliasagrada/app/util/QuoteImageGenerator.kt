@@ -27,11 +27,26 @@ object QuoteImageGenerator {
     /** Limite de versículos numa única imagem, para a imagem não ficar gigante nem lenta de gerar. */
     const val MAX_VERSES_PER_IMAGE = 25
 
-    // Mesmas cores do tema dourado do app, para a imagem já sair "com a cara do app".
-    private const val BG_COLOR = "#20140B"
-    private const val GOLD_COLOR = "#D7B37B"
-    private const val TEXT_COLOR = "#F3ECE0"
-    private const val FOOTER_COLOR = "#9C8B6F"
+    /**
+     * Cores usadas na imagem, para combinar com o tema que a pessoa está usando no app
+     * (dourado, preto e branco, ou rosé — claro ou escuro). Todos os valores em formato
+     * de cor Android (Int ARGB), o que combina naturalmente com `.toArgb()` de uma
+     * `androidx.compose.ui.graphics.Color`.
+     */
+    data class Theme(
+        val background: Int,
+        val accent: Int,
+        val text: Int,
+        val footer: Int
+    )
+
+    // Usado apenas se nenhum tema for informado (fallback dourado escuro, cor original do app).
+    private val DEFAULT_THEME = Theme(
+        background = Color.parseColor("#20140B"),
+        accent = Color.parseColor("#D7B37B"),
+        text = Color.parseColor("#F3ECE0"),
+        footer = Color.parseColor("#9C8B6F")
+    )
 
     /**
      * Gera a imagem e devolve um content:// URI pronto para usar num Intent.ACTION_SEND.
@@ -40,6 +55,7 @@ object QuoteImageGenerator {
     fun generateAndShare(
         context: Context,
         verses: List<Verse>,
+        theme: Theme = DEFAULT_THEME,
         appName: String = "Bíblia Sagrada para Todos",
         appLink: String = "https://t.me/BibliaSagradaparatodos"
     ): android.net.Uri {
@@ -49,7 +65,7 @@ object QuoteImageGenerator {
         val oneHourAgo = System.currentTimeMillis() - 60 * 60 * 1000
         dir.listFiles()?.forEach { old -> if (old.lastModified() < oneHourAgo) old.delete() }
 
-        val bitmap = generateBitmap(verses.take(MAX_VERSES_PER_IMAGE), appName, appLink)
+        val bitmap = generateBitmap(verses.take(MAX_VERSES_PER_IMAGE), theme, appName, appLink)
         val file = File(dir, "citacao_${System.currentTimeMillis()}.png")
         FileOutputStream(file).use { out ->
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
@@ -58,27 +74,72 @@ object QuoteImageGenerator {
         return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
     }
 
-    private fun generateBitmap(verses: List<Verse>, appName: String, appLink: String): Bitmap {
+    /**
+     * Gera a imagem e salva direto na galeria do celular (álbum "Bíblia Sagrada"),
+     * usando a API moderna (MediaStore) no Android 10+, e o caminho de arquivo
+     * tradicional em versões mais antigas.
+     */
+    fun saveToGallery(
+        context: Context,
+        verses: List<Verse>,
+        theme: Theme = DEFAULT_THEME,
+        appName: String = "Bíblia Sagrada para Todos",
+        appLink: String = "https://t.me/BibliaSagradaparatodos"
+    ): Boolean {
+        val bitmap = generateBitmap(verses.take(MAX_VERSES_PER_IMAGE), theme, appName, appLink)
+        val fileName = "biblia_sagrada_${System.currentTimeMillis()}.png"
+        return try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                val values = android.content.ContentValues().apply {
+                    put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, fileName)
+                    put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png")
+                    put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Bíblia Sagrada")
+                }
+                val uri = context.contentResolver.insert(
+                    android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values
+                ) ?: return false
+                context.contentResolver.openOutputStream(uri)?.use { out ->
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+                } ?: return false
+            } else {
+                @Suppress("DEPRECATION")
+                val picturesDir = android.os.Environment.getExternalStoragePublicDirectory(
+                    android.os.Environment.DIRECTORY_PICTURES
+                )
+                val albumDir = File(picturesDir, "Bíblia Sagrada").apply { mkdirs() }
+                val file = File(albumDir, fileName)
+                FileOutputStream(file).use { out -> bitmap.compress(Bitmap.CompressFormat.PNG, 100, out) }
+                android.media.MediaScannerConnection.scanFile(context, arrayOf(file.absolutePath), arrayOf("image/png"), null)
+            }
+            true
+        } catch (e: Exception) {
+            false
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
+    private fun generateBitmap(verses: List<Verse>, theme: Theme, appName: String, appLink: String): Bitmap {
         val quoteText = verses.joinToString(" ") { it.text.trim() }
         val reference = referenceFor(verses)
 
         val quotePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor(TEXT_COLOR)
+            color = theme.text
             textSize = 46f
             typeface = Typeface.create(Typeface.SERIF, Typeface.ITALIC)
         }
         val refPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor(GOLD_COLOR)
+            color = theme.accent
             textSize = 38f
             typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
         }
         val footerPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor(FOOTER_COLOR)
+            color = theme.footer
             textSize = 28f
             typeface = Typeface.DEFAULT
         }
         val quoteMarkPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor(GOLD_COLOR)
+            color = theme.accent
             textSize = 130f
             typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
             alpha = 140
@@ -98,11 +159,11 @@ object QuoteImageGenerator {
 
         val bitmap = Bitmap.createBitmap(WIDTH, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-        canvas.drawColor(Color.parseColor(BG_COLOR))
+        canvas.drawColor(theme.background)
 
-        // Moldura sutil dourada
+        // Moldura sutil na cor de destaque do tema
         val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor(GOLD_COLOR)
+            color = theme.accent
             style = Paint.Style.STROKE
             strokeWidth = 3f
             alpha = 120
@@ -127,7 +188,7 @@ object QuoteImageGenerator {
         // Rodapé: nome do app + link
         val footerY = topBlock + quoteLayout.height + spacingAfterQuote + refLayout.height + spacingBeforeFooter
         val dividerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor(GOLD_COLOR)
+            color = theme.accent
             alpha = 90
             strokeWidth = 2f
         }

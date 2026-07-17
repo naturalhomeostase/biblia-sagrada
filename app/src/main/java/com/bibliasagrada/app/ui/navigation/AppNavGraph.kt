@@ -10,6 +10,7 @@ import com.bibliasagrada.app.data.repository.BibleRepository
 import com.bibliasagrada.app.ui.screens.AboutScreen
 import com.bibliasagrada.app.ui.screens.BackupScreen
 import com.bibliasagrada.app.ui.screens.BookmarksScreen
+import com.bibliasagrada.app.ui.screens.DailyVerseScreen
 import com.bibliasagrada.app.ui.screens.BooksScreen
 import com.bibliasagrada.app.ui.screens.ChaptersScreen
 import com.bibliasagrada.app.ui.screens.FavoritesScreen
@@ -26,7 +27,17 @@ import com.bibliasagrada.app.ui.screens.TranslationsScreen
 fun AppNavGraph(repository: BibleRepository) {
     val navController = rememberNavController()
 
-    NavHost(navController = navController, startDestination = Routes.BOOKS) {
+    NavHost(navController = navController, startDestination = Routes.DAILY_VERSE) {
+        composable(Routes.DAILY_VERSE) {
+            DailyVerseScreen(
+                repository = repository,
+                onContinue = {
+                    navController.navigate(Routes.BOOKS) {
+                        popUpTo(Routes.DAILY_VERSE) { inclusive = true }
+                    }
+                }
+            )
+        }
         composable(Routes.BOOKS) {
             BooksScreen(
                 repository = repository,

@@ -14,7 +14,7 @@ import androidx.room.RoomDatabase
         ReadingProgressEntity::class,
         BookmarkEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class UserDataDatabase : RoomDatabase() {

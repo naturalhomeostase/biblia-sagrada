@@ -63,6 +63,7 @@ import com.bibliasagrada.app.data.model.Book
 import com.bibliasagrada.app.data.repository.BibleRepository
 import com.bibliasagrada.app.data.repository.ColorPalette
 import com.bibliasagrada.app.ui.theme.LocalColorPalette
+import com.bibliasagrada.app.ui.theme.LocalHighlightColors
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -89,7 +90,9 @@ fun BooksScreen(
     var menuExpanded by remember { mutableStateOf(false) }
     val pagerState = rememberPagerState(pageCount = { 2 })
     val bookmarkedBookIds by repository.observeBookmarkedBookIds().collectAsState(initial = emptySet())
+    val singleBookmarkColorByBook by repository.observeSingleBookmarkColorByBook().collectAsState(initial = emptyMap())
     val colorPalette = LocalColorPalette.current
+    val highlightColors = LocalHighlightColors.current
 
     LaunchedEffect(Unit) {
         books = repository.getBooks()
@@ -249,10 +252,12 @@ fun BooksScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(book.name, style = MaterialTheme.typography.bodyLarge.copy(fontSize = 17.sp))
                                 if (bookmarkedBookIds.contains(book.id)) {
+                                    val specificColorName = singleBookmarkColorByBook[book.id]
+                                    val tint = specificColorName?.let { highlightColors[it] } ?: MaterialTheme.colorScheme.primary
                                     Icon(
                                         Icons.Filled.Bookmark,
                                         contentDescription = "Tem marcador",
-                                        tint = MaterialTheme.colorScheme.primary,
+                                        tint = tint,
                                         modifier = Modifier.padding(start = 6.dp).size(16.dp)
                                     )
                                 }

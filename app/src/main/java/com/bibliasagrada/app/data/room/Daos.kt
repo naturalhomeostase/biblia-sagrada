@@ -31,6 +31,9 @@ interface HighlightDao {
     @Query("SELECT * FROM highlights WHERE bookId=:bookId AND chapter=:chapter")
     fun observeForChapter(bookId: Int, chapter: Int): Flow<List<HighlightEntity>>
 
+    @Query("SELECT * FROM highlights WHERE bookId=:bookId AND chapter=:chapter AND verse=:verse LIMIT 1")
+    suspend fun getForVerse(bookId: Int, chapter: Int, verse: Int): HighlightEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(entity: HighlightEntity)
 

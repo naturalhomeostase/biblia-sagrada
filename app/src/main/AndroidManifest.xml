@@ -2,6 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Só é usada de fato em Android 9 (API 28) ou anterior — a partir do
+         Android 10, salvar imagem na galeria não precisa dessa permissão. -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
 
     <application
         android:allowBackup="true"
@@ -36,6 +39,19 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- Widget da Caixinha de Promessas (tela inicial do celular) -->
+        <receiver
+            android:name=".widget.PromisesWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.bibliasagrada.app.widget.ACTION_REFRESH" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/promises_widget_info" />
+        </receiver>
     </application>
 
 </manifest>

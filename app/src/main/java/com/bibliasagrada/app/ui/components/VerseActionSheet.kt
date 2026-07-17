@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.FormatColorReset
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.HorizontalDivider
@@ -52,6 +53,7 @@ fun VerseActionSheet(
     onCopy: () -> Unit,
     onShare: () -> Unit,
     onShareImage: () -> Unit,
+    onSaveImage: () -> Unit,
     onToggleFavorite: () -> Unit,
     onSetHighlight: (String?) -> Unit,
     onSaveNote: (String) -> Unit,
@@ -86,8 +88,9 @@ fun VerseActionSheet(
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
             ActionIcon(Icons.Filled.ContentCopy, "Copiar", onClick = onCopy)
-            ActionIcon(Icons.Filled.Share, "Compartilhar", onClick = onShare)
-            ActionIcon(Icons.Filled.Image, "Como imagem", onClick = onShareImage)
+            ActionIcon(Icons.Filled.Share, "Enviar", onClick = onShare)
+            ActionIcon(Icons.Filled.Image, "Imagem", onClick = onShareImage)
+            ActionIcon(Icons.Filled.Download, "Salvar", onClick = onSaveImage)
             ActionIcon(
                 if (isFavorite) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder,
                 "Favorito",
@@ -96,7 +99,15 @@ fun VerseActionSheet(
         }
 
         Spacer(Modifier.height(16.dp))
-        Text("Marcar com cor", style = MaterialTheme.typography.labelLarge)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Marcar com cor", style = MaterialTheme.typography.labelLarge)
+            if (currentHighlight != null) {
+                TextButton(onClick = { onSetHighlight(null) }, modifier = Modifier.padding(start = 8.dp)) {
+                    Icon(Icons.Filled.FormatColorReset, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Text("Remover marcação", modifier = Modifier.padding(start = 4.dp))
+                }
+            }
+        }
         Spacer(Modifier.height(8.dp))
         val highlightColors = LocalHighlightColors.current
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -110,11 +121,6 @@ fun VerseActionSheet(
                         .size(if (selected) 34.dp else 28.dp)
                         .clickable { onSetHighlight(if (selected) null else name) }
                 ) {}
-            }
-            if (currentHighlight != null) {
-                IconButton(onClick = { onSetHighlight(null) }) {
-                    Icon(Icons.Filled.FormatColorReset, contentDescription = "Remover marcação")
-                }
             }
         }
 
@@ -145,6 +151,6 @@ fun VerseActionSheet(
 private fun ActionIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable { onClick() }) {
         IconButton(onClick = onClick) { Icon(icon, contentDescription = label) }
-        Text(label, style = MaterialTheme.typography.labelMedium)
+        Text(label, style = MaterialTheme.typography.labelMedium, maxLines = 1)
     }
 }

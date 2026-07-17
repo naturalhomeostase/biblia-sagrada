@@ -2,6 +2,7 @@ package com.bibliasagrada.app.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import android.provider.DocumentsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -51,6 +52,18 @@ import com.bibliasagrada.app.data.repository.TranslationsCatalog
 import com.bibliasagrada.app.util.TranslationImporter
 import kotlinx.coroutines.launch
 
+/** Igual ao GetContent padrão, mas sugere abrir já perto da pasta Downloads
+ *  (funciona na maioria dos celulares com o seletor de arquivos padrão do
+ *  Android; alguns fabricantes usam um seletor próprio que pode ignorar essa dica). */
+private class GetContentNearDownloads : ActivityResultContracts.GetContent() {
+    override fun createIntent(context: android.content.Context, input: String): Intent {
+        val intent = super.createIntent(context, input)
+        val downloadsUri = Uri.parse("content://com.android.externalstorage.documents/document/primary:Download")
+        intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, downloadsUri)
+        return intent
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TranslationsScreen(
@@ -71,7 +84,7 @@ fun TranslationsScreen(
     var importTargetFileName by remember { mutableStateOf<String?>(null) }
 
     val importLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetContent()
+        GetContentNearDownloads()
     ) { uri: Uri? ->
         val targetFileName = importTargetFileName
         if (uri != null && targetFileName != null) {

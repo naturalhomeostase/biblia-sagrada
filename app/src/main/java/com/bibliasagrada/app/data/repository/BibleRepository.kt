@@ -106,6 +106,8 @@ class BibleRepository(private val appContext: Context) {
     fun observeHighlightsForChapter(bookId: Int, chapter: Int): Flow<List<HighlightEntity>> =
         userDb.highlightDao().observeForChapter(bookId, chapter)
     fun observeAllHighlights(): Flow<List<HighlightEntity>> = userDb.highlightDao().observeAll()
+    suspend fun getHighlightForVerse(bookId: Int, chapter: Int, verse: Int): String? =
+        userDb.highlightDao().getForVerse(bookId, chapter, verse)?.color
     suspend fun setHighlight(bookId: Int, chapter: Int, verse: Int, color: String?) {
         if (color == null) {
             userDb.highlightDao().delete(bookId, chapter, verse)
@@ -154,14 +156,39 @@ class BibleRepository(private val appContext: Context) {
     /** Ids dos livros que têm ao menos um marcador — para mostrar o ícone na lista de livros. */
     fun observeBookmarkedBookIds(): Flow<Set<Int>> =
         userDb.bookmarkDao().observeAll().map { list -> list.map { it.bookId }.toSet() }
-    suspend fun addBookmark(bookId: Int, chapter: Int, name: String) {
-        userDb.bookmarkDao().insert(BookmarkEntity(bookId = bookId, chapter = chapter, name = name))
+    /** bookId -> cor do marcador, só quando o livro tem EXATAMENTE um marcador com cor definida
+     *  (quando há mais de um marcador no mesmo livro, o ícone usa a cor padrão do tema). */
+    fun observeSingleBookmarkColorByBook(): Flow<Map<Int, String?>> =
+        userDb.bookmarkDao().observeAll().map { list ->
+            list.groupBy { it.bookId }
+                .filterValues { it.size == 1 }
+                .mapValues { (_, bookmarks) -> bookmarks.first().color }
+        }
+    suspend fun addBookmark(bookId: Int, chapter: Int, name: String, color: String? = null) {
+        userDb.bookmarkDao().insert(BookmarkEntity(bookId = bookId, chapter = chapter, name = name, color = color))
     }
     suspend fun removeBookmark(id: Long) {
         userDb.bookmarkDao().deleteById(id)
     }
     suspend fun removeBookmarksForChapter(bookId: Int, chapter: Int) {
         userDb.bookmarkDao().deleteForChapter(bookId, chapter)
+    }
+
+    // --- Versículo do dia ---
+    /**
+     * Escolhe o versículo de hoje para esta pessoa: cada instalação tem sua
+     * própria "semente" (gerada uma vez, ver PreferencesManager), usada para
+     * embaralhar a lista de forma diferente para cada usuário. O dia do ano
+     * decide a posição dentro dessa lista embaralhada — então o mesmo
+     * versículo aparece o dia inteiro, mas muda à meia-noite, e não se repete
+     * dentro do ciclo (há bem mais de 365 versículos no catálogo).
+     */
+    suspend fun getDailyVerse(): Verse? = withContext(Dispatchers.IO) {
+        val seed = prefs.getOrCreateDailyVerseSeed()
+        val shuffled = DailyVersesCatalog.ALL.shuffled(kotlin.random.Random(seed))
+        val dayOfYear = java.time.LocalDate.now().dayOfYear
+        val ref = shuffled[dayOfYear % shuffled.size]
+        bibleDb.getVerse(ref.bookId, ref.chapter, ref.verse)
     }
 
     companion object {

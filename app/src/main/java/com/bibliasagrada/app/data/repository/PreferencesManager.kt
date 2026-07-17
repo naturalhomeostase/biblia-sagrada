@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
@@ -27,6 +28,7 @@ class PreferencesManager(private val context: Context) {
         val LAST_CHAPTER = intPreferencesKey("last_chapter")
         val ACTIVE_TRANSLATION = stringPreferencesKey("active_translation")
         val PAGE_TURN_SOUND = booleanPreferencesKey("page_turn_sound")
+        val DAILY_VERSE_SEED = stringPreferencesKey("daily_verse_seed")
     }
 
     val fontScale: Flow<Float> = context.dataStore.data.map { it[FONT_SCALE] ?: 1.0f }
@@ -63,5 +65,19 @@ class PreferencesManager(private val context: Context) {
 
     suspend fun setPageTurnSoundEnabled(enabled: Boolean) {
         context.dataStore.edit { it[PAGE_TURN_SOUND] = enabled }
+    }
+
+    /**
+     * Semente única desta instalação, usada para embaralhar a ordem do
+     * "Versículo do dia" de um jeito diferente para cada pessoa. É gerada
+     * uma única vez (na primeira vez que é lida) e depois fica fixa para
+     * sempre nesse aparelho.
+     */
+    suspend fun getOrCreateDailyVerseSeed(): Long {
+        val current = context.dataStore.data.map { it[DAILY_VERSE_SEED] }.first()
+        if (current != null) return current.toLong()
+        val newSeed = kotlin.random.Random.nextLong()
+        context.dataStore.edit { it[DAILY_VERSE_SEED] = newSeed.toString() }
+        return newSeed
     }
 }
