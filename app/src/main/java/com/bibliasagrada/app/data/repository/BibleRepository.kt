@@ -184,11 +184,33 @@ class BibleRepository(private val appContext: Context) {
      * dentro do ciclo (há bem mais de 365 versículos no catálogo).
      */
     suspend fun getDailyVerse(): Verse? = withContext(Dispatchers.IO) {
-        val seed = prefs.getOrCreateDailyVerseSeed()
-        val shuffled = DailyVersesCatalog.ALL.shuffled(kotlin.random.Random(seed))
-        val dayOfYear = java.time.LocalDate.now().dayOfYear
-        val ref = shuffled[dayOfYear % shuffled.size]
+        val baseSeed = prefs.getOrCreateDailyVerseSeed()
+        val list = DailyVersesCatalog.ALL
+        val daysSinceEpoch = java.time.LocalDate.now().toEpochDay()
+        val cycleLength = list.size.toLong()
+        // Cada ciclo completo pelos versículos ganha uma nova embaralhada
+        // (em vez de repetir a mesma ordem para sempre), então "quando todos
+        // acabarem, recomeçam de forma aleatória de novo".
+        val cycleNumber = daysSinceEpoch / cycleLength
+        val positionInCycle = (daysSinceEpoch % cycleLength).toInt()
+        val shuffleSeed = baseSeed xor cycleNumber
+        val shuffled = list.shuffled(kotlin.random.Random(shuffleSeed))
+        val ref = shuffled[positionInCycle]
         bibleDb.getVerse(ref.bookId, ref.chapter, ref.verse)
+    }
+
+    /** Se o "Versículo do dia" deve aparecer sozinho agora: só uma vez por dia, e só depois das 6h. */
+    suspend fun shouldAutoShowDailyVerse(): Boolean {
+        val now = java.time.LocalDateTime.now()
+        if (now.hour < 6) return false
+        val today = now.toLocalDate().toString()
+        val lastShown = prefs.lastDailyVerseShownDate.first()
+        return lastShown != today
+    }
+
+    suspend fun markDailyVerseShownToday() {
+        val today = java.time.LocalDate.now().toString()
+        prefs.setLastDailyVerseShownDate(today)
     }
 
     companion object {

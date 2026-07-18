@@ -2,6 +2,7 @@ package com.bibliasagrada.app.ui.navigation
 
 object Routes {
     const val DAILY_VERSE = "daily_verse"
+    const val DAILY_VERSE_REVIEW = "daily_verse_review"
     const val BOOKS = "books"
     const val CHAPTERS = "chapters/{bookId}"
     const val READER = "reader/{bookId}/{chapter}/{verse}"

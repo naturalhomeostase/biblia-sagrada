@@ -29,6 +29,7 @@ class PreferencesManager(private val context: Context) {
         val ACTIVE_TRANSLATION = stringPreferencesKey("active_translation")
         val PAGE_TURN_SOUND = booleanPreferencesKey("page_turn_sound")
         val DAILY_VERSE_SEED = stringPreferencesKey("daily_verse_seed")
+        val LAST_DAILY_VERSE_DATE = stringPreferencesKey("last_daily_verse_date")
     }
 
     val fontScale: Flow<Float> = context.dataStore.data.map { it[FONT_SCALE] ?: 1.0f }
@@ -79,5 +80,12 @@ class PreferencesManager(private val context: Context) {
         val newSeed = kotlin.random.Random.nextLong()
         context.dataStore.edit { it[DAILY_VERSE_SEED] = newSeed.toString() }
         return newSeed
+    }
+
+    /** Data (yyyy-MM-dd) em que o Versículo do dia foi mostrado pela última vez automaticamente. */
+    val lastDailyVerseShownDate: Flow<String?> = context.dataStore.data.map { it[LAST_DAILY_VERSE_DATE] }
+
+    suspend fun setLastDailyVerseShownDate(date: String) {
+        context.dataStore.edit { it[LAST_DAILY_VERSE_DATE] = date }
     }
 }

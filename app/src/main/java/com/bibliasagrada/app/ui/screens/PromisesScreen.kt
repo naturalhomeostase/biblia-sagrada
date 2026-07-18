@@ -8,6 +8,12 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -49,6 +55,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
@@ -68,7 +75,7 @@ fun PromisesScreen(
     onOpenReader: (Int, Int, Int) -> Unit
 ) {
     val context = LocalContext.current
-    var opened by remember { mutableStateOf(false) }
+    var revealState by remember { mutableStateOf(RevealState.CLOSED) }
     var current by remember { mutableStateOf<PromiseRef?>(null) }
     var verse by remember { mutableStateOf<Verse?>(null) }
     val colorScheme = MaterialTheme.colorScheme
@@ -107,7 +114,11 @@ fun PromisesScreen(
 
     LaunchedEffect(current) {
         val ref = current
-        if (ref != null) verse = repository.getVerse(ref.bookId, ref.chapter, ref.verse)
+        if (ref != null) {
+            verse = repository.getVerse(ref.bookId, ref.chapter, ref.verse)
+            kotlinx.coroutines.delay(1300) // pequena espera de "suspense" antes de revelar
+            revealState = RevealState.OPEN
+        }
     }
 
     Scaffold(
@@ -126,21 +137,22 @@ fun PromisesScreen(
             contentAlignment = Alignment.Center
         ) {
             AnimatedContent(
-                targetState = opened,
+                targetState = revealState,
                 transitionSpec = { fadeIn() togetherWith fadeOut() },
                 label = "promise-box"
-            ) { isOpen ->
-                if (!isOpen) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            ) { state ->
+                when (state) {
+                    RevealState.CLOSED -> {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(220.dp)
                                 .clickable {
-                                    opened = true
                                     if (current == null) {
                                         current = PromisesCatalog.random()
                                     }
+                                    revealState = RevealState.REVEALING
                                 },
                             shape = RoundedCornerShape(20.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -170,8 +182,50 @@ fun PromisesScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.secondary
                         )
+                        }
                     }
-                } else {
+                    RevealState.REVEALING -> {
+                        val infiniteTransition = rememberInfiniteTransition(label = "suspense")
+                        val rotation by infiniteTransition.animateFloat(
+                            initialValue = 0f,
+                            targetValue = 360f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(1400, easing = LinearEasing),
+                                repeatMode = RepeatMode.Restart
+                            ),
+                            label = "rotation"
+                        )
+                        val pulse by infiniteTransition.animateFloat(
+                            initialValue = 0.85f,
+                            targetValue = 1.15f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(650, easing = LinearEasing),
+                                repeatMode = RepeatMode.Reverse
+                            ),
+                            label = "pulse"
+                        )
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                Icons.Filled.AutoAwesome,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .height(56.dp)
+                                    .graphicsLayer {
+                                        rotationZ = rotation
+                                        scaleX = pulse
+                                        scaleY = pulse
+                                    }
+                            )
+                            Spacer(Modifier.height(20.dp))
+                            Text(
+                                "Preparando sua promessa…",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                    RevealState.OPEN -> {
                     val v = verse
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Card(
@@ -242,12 +296,16 @@ fun PromisesScreen(
                         Spacer(Modifier.height(16.dp))
                         Button(onClick = {
                             current = PromisesCatalog.random(excluding = current)
+                            revealState = RevealState.REVEALING
                         }) {
                             Text("Nova promessa")
                         }
+                    }
                     }
                 }
             }
         }
     }
 }
+
+private enum class RevealState { CLOSED, REVEALING, OPEN }

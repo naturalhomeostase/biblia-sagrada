@@ -81,6 +81,7 @@ fun BooksScreen(
     onPromises: () -> Unit,
     onBackup: () -> Unit,
     onHelp: () -> Unit,
+    onDailyVerseReview: () -> Unit,
     onSettings: () -> Unit,
     onAbout: () -> Unit
 ) {
@@ -164,6 +165,11 @@ fun BooksScreen(
                             text = { Text("Encontre ajuda") },
                             leadingIcon = { Icon(Icons.Filled.Favorite, null) },
                             onClick = { menuExpanded = false; onHelp() }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Rever versículo do dia") },
+                            leadingIcon = { Icon(Icons.Filled.AutoAwesome, null) },
+                            onClick = { menuExpanded = false; onDailyVerseReview() }
                         )
                         DropdownMenuItem(
                             text = { Text("Backup e restauração") },

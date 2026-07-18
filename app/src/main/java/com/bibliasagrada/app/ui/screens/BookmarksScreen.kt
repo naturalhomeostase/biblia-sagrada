@@ -1,5 +1,6 @@
 package com.bibliasagrada.app.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -8,8 +9,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmarks
@@ -35,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.bibliasagrada.app.data.model.Book
 import com.bibliasagrada.app.data.repository.BibleRepository
+import com.bibliasagrada.app.ui.theme.LocalHighlightColors
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -47,6 +51,7 @@ fun BookmarksScreen(
     val scope = rememberCoroutineScope()
     val bookmarks by repository.observeBookmarks().collectAsState(initial = emptyList())
     var books by remember { mutableStateOf<List<Book>>(emptyList()) }
+    val highlightColors = LocalHighlightColors.current
 
     LaunchedEffect(Unit) { books = repository.getBooks() }
 
@@ -84,11 +89,23 @@ fun BookmarksScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
-                            Text(
-                                bookmark.name,
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                bookmark.color?.let { colorName ->
+                                    highlightColors[colorName]?.let { swatch ->
+                                        androidx.compose.foundation.layout.Box(
+                                            modifier = Modifier
+                                                .padding(end = 8.dp)
+                                                .size(12.dp)
+                                                .background(swatch, CircleShape)
+                                        )
+                                    }
+                                }
+                                Text(
+                                    bookmark.name.ifBlank { "(sem nome)" },
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
                             Text(
                                 "$bookName ${bookmark.chapter}",
                                 style = MaterialTheme.typography.bodyMedium

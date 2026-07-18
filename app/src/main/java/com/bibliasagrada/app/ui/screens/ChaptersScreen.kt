@@ -35,6 +35,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.bibliasagrada.app.data.model.Book
 import com.bibliasagrada.app.data.repository.BibleRepository
+import com.bibliasagrada.app.ui.theme.LocalHighlightColors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,9 +48,15 @@ fun ChaptersScreen(
     var book by remember { mutableStateOf<Book?>(null) }
     val bookmarkedChapters by remember(bookId) { repository.observeBookmarksForBook(bookId) }
         .collectAsState(initial = emptyList())
-    val bookmarkedChapterNumbers = remember(bookmarkedChapters) {
-        bookmarkedChapters.map { it.chapter }.toSet()
+    // Para cada capítulo marcado: se todos os marcadores dele têm a mesma cor,
+    // usa essa cor na fita; se houver cores diferentes no mesmo capítulo, usa
+    // a cor padrão do tema (mesma regra usada para o ícone ao lado do livro).
+    val colorByChapter = remember(bookmarkedChapters) {
+        bookmarkedChapters.groupBy { it.chapter }.mapValues { (_, marks) ->
+            marks.map { it.color }.distinct().let { if (it.size == 1) it.first() else null }
+        }
     }
+    val highlightColors = LocalHighlightColors.current
 
     LaunchedEffect(bookId) {
         book = repository.getBook(bookId)
@@ -92,11 +99,13 @@ fun ChaptersScreen(
                                 Text("$chapter", style = MaterialTheme.typography.titleMedium)
                             }
                         }
-                        if (bookmarkedChapterNumbers.contains(chapter)) {
+                        if (colorByChapter.containsKey(chapter)) {
+                            val specificColorName = colorByChapter[chapter]
+                            val tint = specificColorName?.let { highlightColors[it] } ?: MaterialTheme.colorScheme.primary
                             Icon(
                                 Icons.Filled.Bookmark,
                                 contentDescription = "Capítulo marcado",
-                                tint = MaterialTheme.colorScheme.primary,
+                                tint = tint,
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
                                     .padding(top = 2.dp, end = 4.dp)

@@ -379,9 +379,14 @@ fun ReaderScreen(
     }
 
     if (showBookmarkDialog && currentRef != null) {
+        val allBookmarks by repository.observeBookmarks().collectAsState(initial = emptyList())
+        val allBookmarkNames = remember(allBookmarks) {
+            allBookmarks.map { it.name }.filter { it.isNotBlank() }.distinct().sorted()
+        }
         BookmarkDialog(
             isBookmarked = isChapterBookmarked,
             existingNames = bookmarksInChapter.map { it.name },
+            allBookmarkNames = allBookmarkNames,
             onDismiss = { showBookmarkDialog = false },
             onSave = { name, color ->
                 scope.launch { repository.addBookmark(currentRef.bookId, currentRef.chapter, name, color) }
@@ -453,6 +458,7 @@ fun ReaderScreen(
 private fun BookmarkDialog(
     isBookmarked: Boolean,
     existingNames: List<String>,
+    allBookmarkNames: List<String>,
     onDismiss: () -> Unit,
     onSave: (String, String?) -> Unit,
     onRemoveAll: () -> Unit
@@ -482,10 +488,36 @@ private fun BookmarkDialog(
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
+                if (allBookmarkNames.isNotEmpty()) {
+                    Text(
+                        "Usar um marcador existente (junta esta página nele):",
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.padding(top = 12.dp, bottom = 6.dp)
+                    )
+                    androidx.compose.foundation.lazy.LazyRow(
+                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
+                    ) {
+                        androidx.compose.foundation.lazy.items(allBookmarkNames) { existing ->
+                            val isChosen = name == existing
+                            androidx.compose.material3.AssistChip(
+                                onClick = { name = if (isChosen) "" else existing },
+                                label = { Text(existing) },
+                                colors = if (isChosen) {
+                                    androidx.compose.material3.AssistChipDefaults.assistChipColors(
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                        labelColor = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                } else {
+                                    androidx.compose.material3.AssistChipDefaults.assistChipColors()
+                                }
+                            )
+                        }
+                    }
+                }
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    placeholder = { Text("Nome (opcional)") },
+                    placeholder = { Text("Nome (opcional) — ou escolha acima") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
                 )
@@ -522,6 +554,7 @@ private fun BookmarkDialog(
         }
     )
 }
+
 
 /** Pequena fita no canto superior indicando que esta página tem um marcador salvo. */
 @Composable
@@ -697,13 +730,16 @@ private fun ChapterPage(
                         color = MaterialTheme.colorScheme.primary
                     )
                     Text(
-                        text = verse.text,
-                        style = readingTextStyle(liveFontScale),
-                        modifier = if (bgColor != null && !isSelected) {
-                            Modifier.background(bgColor, RoundedCornerShape(3.dp))
+                        text = if (bgColor != null && !isSelected) {
+                            androidx.compose.ui.text.buildAnnotatedString {
+                                withStyle(androidx.compose.ui.text.SpanStyle(background = bgColor)) {
+                                    append(verse.text)
+                                }
+                            }
                         } else {
-                            Modifier
-                        }
+                            androidx.compose.ui.text.AnnotatedString(verse.text)
+                        },
+                        style = readingTextStyle(liveFontScale)
                     )
                 }
             }

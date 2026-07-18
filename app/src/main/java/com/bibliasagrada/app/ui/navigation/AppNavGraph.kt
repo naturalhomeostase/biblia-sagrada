@@ -1,5 +1,8 @@
 package com.bibliasagrada.app.ui.navigation
 
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -28,7 +31,11 @@ fun AppNavGraph(repository: BibleRepository) {
     val navController = rememberNavController()
 
     NavHost(navController = navController, startDestination = Routes.DAILY_VERSE) {
-        composable(Routes.DAILY_VERSE) {
+        composable(
+            Routes.DAILY_VERSE,
+            // Transição bem mais lenta e suave ao seguir para a Bíblia, em vez do corte seco padrão.
+            exitTransition = { fadeOut(animationSpec = tween(900)) }
+        ) {
             DailyVerseScreen(
                 repository = repository,
                 onContinue = {
@@ -38,7 +45,17 @@ fun AppNavGraph(repository: BibleRepository) {
                 }
             )
         }
-        composable(Routes.BOOKS) {
+        composable(Routes.DAILY_VERSE_REVIEW) {
+            DailyVerseScreen(
+                repository = repository,
+                forceShow = true,
+                onContinue = { navController.popBackStack() }
+            )
+        }
+        composable(
+            Routes.BOOKS,
+            enterTransition = { fadeIn(animationSpec = tween(900)) }
+        ) {
             BooksScreen(
                 repository = repository,
                 onOpenBook = { bookId -> navController.navigate(Routes.chapters(bookId)) },
@@ -55,7 +72,8 @@ fun AppNavGraph(repository: BibleRepository) {
                 onBackup = { navController.navigate(Routes.BACKUP) },
                 onHelp = { navController.navigate(Routes.HELP) },
                 onSettings = { navController.navigate(Routes.SETTINGS) },
-                onAbout = { navController.navigate(Routes.ABOUT) }
+                onAbout = { navController.navigate(Routes.ABOUT) },
+                onDailyVerseReview = { navController.navigate(Routes.DAILY_VERSE_REVIEW) }
             )
         }
         composable(
