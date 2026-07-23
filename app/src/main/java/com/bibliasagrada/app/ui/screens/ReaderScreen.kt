@@ -513,7 +513,7 @@ private fun BookmarkDialog(
                     androidx.compose.foundation.lazy.LazyRow(
                         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
                     ) {
-                        androidx.compose.foundation.lazy.items(allBookmarkNames) { existing ->
+                        items(allBookmarkNames) { existing ->
                             val isChosen = name == existing
                             androidx.compose.material3.AssistChip(
                                 onClick = { name = if (isChosen) "" else existing },
