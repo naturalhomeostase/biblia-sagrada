@@ -10,8 +10,12 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // JitPack: onde vive o jaudiotagger (fork compatível com Android,
+        // sem dependências de java.awt), usado pra editar tags reais
+        // (artista/álbum/gênero/etc) direto no arquivo de áudio.
+        maven(url = "https://jitpack.io")
     }
 }
 
-rootProject.name = "Biblia Sagrada"
+rootProject.name = "Harmonic"
 include(":app")

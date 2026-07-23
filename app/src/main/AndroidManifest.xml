@@ -1,35 +1,86 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Leitura da biblioteca de áudio -->
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
+    <!-- Baixar letras e capas automaticamente da internet -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Só é usada de fato em Android 9 (API 28) ou anterior — a partir do
-         Android 10, salvar imagem na galeria não precisa dessa permissão. -->
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Playback em segundo plano -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- Bluetooth: responder a botões do fone/carro -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
+    <!-- "Definir como toque de chamada": permissão especial, concedida só
+         pela tela de configurações do sistema (não por um diálogo padrão) -->
+    <uses-permission android:name="android.permission.WRITE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
 
     <application
+        android:name=".HarmonicApp"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
-        android:theme="@style/Theme.BibliaSagrada"
-        android:dataExtractionRules="@xml/data_extraction_rules"
-        android:fullBackupContent="@xml/backup_rules">
+        android:theme="@style/Theme.Harmonic"
+        android:enableOnBackInvokedCallback="true"
+        tools:targetApi="34">
 
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:configChanges="orientation|screenSize|keyboardHidden"
-            android:theme="@style/Theme.BibliaSagrada">
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.Harmonic"
+            android:configChanges="orientation|screenSize|keyboardHidden">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- Permite que o Music Box apareça na lista de "Abrir com" ao
+                 tocar num arquivo de áudio em outro app (gerenciador de
+                 arquivos, e-mail, Drive, WhatsApp, etc). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="audio/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="audio/*" />
+            </intent-filter>
         </activity>
 
-        <!-- Necessário para compartilhar a imagem de citação gerada (ver
-             ShareImageGenerator.kt) — o Android moderno não permite mais
-             compartilhar arquivos por caminho direto, só por content:// URI. -->
+        <!-- Serviço de reprodução: sobrevive com o app em segundo plano,
+             expõe a MediaSession usada pela notificação, tela bloqueada,
+             Bluetooth e Android Auto -->
+        <service
+            android:name=".playback.PlaybackService"
+            android:exported="true"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
+
+        <!-- Necessário pra compartilhar playlists exportadas em M3U com
+             outros apps (WhatsApp, Drive, e-mail, etc) -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -40,18 +91,17 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
-        <!-- Widget da Caixinha de Promessas (tela inicial do celular) -->
+        <!-- Widget de tela inicial -->
         <receiver
-            android:name=".widget.PromisesWidgetProvider"
+            android:name=".widget.HarmonicWidgetReceiver"
             android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="com.bibliasagrada.app.widget.ACTION_REFRESH" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
-                android:resource="@xml/promises_widget_info" />
+                android:resource="@xml/harmonic_widget_info" />
         </receiver>
-    </application>
 
+    </application>
 </manifest>

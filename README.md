@@ -1,107 +1,122 @@
-# Bíblia Sagrada — App Android (Fase 1)
+# Harmonic 🎵
 
-App de leitura da Bíblia para Android, 100% offline, gratuito, sem anúncios e livre para redistribuição.
+Player de música local para Android — rápido, offline, sem anúncios.
+Inspirado no Poweramp, com interface Material You.
 
-> **Não quer lidar com Android Studio?** Veja o arquivo
-> [`COMO_INSTALAR_SEM_ANDROID_STUDIO.md`](./COMO_INSTALAR_SEM_ANDROID_STUDIO.md) — um jeito
-> de gerar o APK na nuvem (via GitHub Actions) e instalar direto no celular, sem precisar
-> compilar nada localmente.
+## Status: Fase 3 em andamento
 
-## Texto bíblico usado
+Adicionado nesta leva:
 
-Este projeto usa a tradução **Bíblia Livre (BLIVRE)**, edição baseada no Textus Receptus (`bliv-tr`),
-licenciada sob **Creative Commons Atribuição 3.0 Brasil (CC BY 3.0 BR)**.
+- ✅ Capa real do álbum (embutida no arquivo de áudio), com cache em memória —
+  aparece na Biblioteca, no mini player e em "Agora Tocando"; cai num ícone
+  de nota musical quando a música não tem capa
+- ✅ Letras sincronizadas (LRC) offline — procura automaticamente um arquivo
+  `.lrc` (sincronizado) ou `.txt` (simples) com o mesmo nome da música, na
+  mesma pasta; auto-scroll e destaque da linha atual em "Agora Tocando"
+- ✅ Widget de tela inicial (Glance) — mostra música atual + play/pause/
+  próxima/anterior, atualiza sozinho quando a música troca
 
-> A Bíblia Livre tem uso livre, porém a menção da obra de forma adequada é obrigatória.
+## Correções críticas (feedback do segundo teste)
 
-Créditos sugeridos pelos próprios tradutores (mantenha isso em uma tela "Sobre" no app):
+- ✅ **Músicas duplicando a cada abertura do app** — a tabela não tinha
+  índice único em `mediaStoreId`, então cada escaneamento inserida linhas
+  novas em vez de atualizar as existentes. Corrigido, e agora o
+  escaneamento também preserva favoritos/contagem de reprodução/posição
+  salva em vez de resetar tudo.
+- ✅ **Músicas não apareciam até reiniciar o app** — o primeiro
+  escaneamento rodava antes da permissão ser concedida (no
+  `Application.onCreate`), e nada disparava um novo escaneamento depois
+  que o usuário aceitava a permissão. Agora isso é automático.
+- ✅ **Player não aparecia na barra de notificação** — faltava pedir a
+  permissão de notificações em tempo de execução (obrigatória no Android
+  13+). Sem ela, o sistema simplesmente não mostra a notificação mesmo com
+  o player funcionando normalmente.
 
-```
-Todas as Escrituras em português citadas são da Bíblia Livre (BLIVRE),
-Copyright © Diego Santos, Mario Sérgio, e Marco Teles,
-http://sites.google.com/site/biblialivre/
-Licença Creative Commons Atribuição 3.0 Brasil
-(http://creativecommons.org/licenses/by/3.0/br/)
-```
+## Visual (segunda rodada de ajustes)
 
-Fonte original: https://github.com/blivre/BibliaLivre
+- ✅ Barras de título transparentes com o texto na cor de destaque
+- ✅ Sombra (escurecimento) sobre o fundo agora é ajustável por slider (0-90%)
+- ✅ Blur agora é ajustável por slider (0-40dp) em vez de switch liga/desliga
+  — e o padrão agora é 0 (nítido), já que o blur fixo anterior estava forte demais
+- ✅ Temas em gradiente (6 opções) que não dependem de nenhuma imagem — mais
+  leve, e agora é o fundo padrão do app quando nada foi escolhido
+- ✅ Título/artista na tela "Agora Tocando" com cores explícitas (destaque/branco)
+- ✅ Música tocando atualmente é destacada na lista da Biblioteca — ícone
+  (equalizador tocando/pausado) + texto na cor de destaque
 
-O texto já está processado e embutido em `app/src/main/assets/biblia.db` (SQLite, 66 livros,
-31.102 versículos, com índice de busca full-text FTS4 pronto para uso).
 
-## Ícone do app
 
-O ícone (livro preto com detalhes dourados) já está integrado como ícone adaptativo
-(`res/mipmap-*/ic_launcher_foreground.png` + `res/values/ic_launcher_background.xml`),
-funcionando em qualquer formato de máscara do launcher (círculo, quadrado arredondado, etc.).
+- ✅ Fundo transparente atrás das listas (Biblioteca, Playlists) — antes cada
+  item tinha um fundo sólido escondendo o papel de parede
+- ✅ Mini player translúcido em vez de opaco
+- ✅ Tema padrão trocado de "sistema" pra "escuro" — se o celular está no
+  tema claro do sistema, mas o app sempre mostra uma foto de fundo escura,
+  o texto ficava escuro sobre fundo escuro (ilegível); título/artista pretos
+  na tela "Agora Tocando" era esse bug
+- ✅ Paleta de cores de destaque ampliada (16 cores) + seletor de cor
+  personalizada (RGB) — antes só 5 opções fixas
+- ✅ Opção de escolher qualquer foto da galeria como fundo (antes só os 5
+  wallpapers inclusos)
+- ✅ Opção de desfocar o fundo (blur) — só tem efeito real no Android 12+,
+  em versões mais antigas a imagem fica nítida mesmo com a opção ativada
+- ✅ Ícone de play/pause do mini player agora atualiza na hora (antes podia
+  ficar um instante mostrando o ícone errado até o player confirmar)
 
-Uma versão de 512x512 com fundo sólido (para publicar na Play Store, que exige PNG sem
-transparência) está em `store_assets/icone_play_store_512x512.png`.
 
-## Como abrir o projeto
 
-1. Instale o **Android Studio** (versão Koala/2024.1 ou mais recente).
-2. Abra a pasta `BibliaSagrada` como projeto existente (`File > Open`).
-3. Aguarde o Gradle sincronizar (ele vai baixar automaticamente o Gradle Wrapper e as
-   dependências na primeira vez — precisa de internet só nesse passo único).
-4. Rode em um emulador ou celular físico (`Run > Run 'app'`).
+O widget foi escrito usando a API do Glance (`androidx.glance:glance-appwidget`),
+que é bem menos comum que o Compose "normal" — por isso é a parte deste PR
+com **menor confiança de compilar de primeira**. Se o próximo build falhar
+especificamente em arquivos dentro de `widget/`, é o candidato nº 1 a
+investigar (nomes de parâmetros de `Row`/`Column`/`ColorProvider` no Glance
+podem estar levemente diferentes da versão 1.1.0 real). O resto do projeto
+(capa do álbum, letras) usa só Compose/Coil/MediaStore padrão, mais testado.
 
-Requisitos mínimos: Android 8.0 (API 26) ou superior.
+## O que falta (continuando a fase 3)
 
-## Funcionalidades implementadas (Fase 1 — essenciais)
+- ⬜ Crossfade + ReplayGain (mixagem de fato entre faixas)
+- ⬜ Android Auto (requer migrar de `MediaSessionService` pra `MediaLibraryService`)
+- ⬜ Visualizador de espectro/ondas
+- ⬜ Detecção de duplicatas e arquivos quebrados
+- ⬜ A-B Repeat, marcadores/bookmarks, "Wrapped" anual
+- ⬜ Editor de tags
+- ⬜ Busca de letras online (a busca offline já funciona)
+- ⬜ Presets de equalizador prontos (Rock, Pop, Jazz...)
+- ⬜ Widgets em outros tamanhos (hoje só tem um tamanho médio)
 
-- ✅ Leitura 100% offline (banco SQLite embutido no APK, nada é baixado)
-- ✅ Escolha de livro → capítulo → versículo
-- ✅ Busca por palavra (índice FTS4) com fallback para busca aproximada (tolera erros de digitação)
-- ✅ Busca por referência direta (ex: "João 3:16", "jo 3.16", "1 cor 13")
-- ✅ Filtro de busca por Antigo/Novo Testamento
-- ✅ Tamanho de fonte ajustável (slider nas Configurações)
-- ✅ Modo claro / escuro / seguir o sistema
-- ✅ Favoritos
-- ✅ Histórico dos últimos capítulos lidos
-- ✅ "Continuar de onde parei" (card na tela inicial)
-- ✅ Compartilhar versículo como texto (Intent nativo do Android)
-- ✅ Copiar versículo para a área de transferência
-- ✅ Marcação (highlight) com 5 cores, com opção de remover
-- ✅ Notas pessoais vinculadas a versículos
-- ✅ Navegação por gesto (deslizar) entre capítulos — contínua por toda a Bíblia
+## Como compilar
+
+### Opção 1 — Android Studio (recomendado para desenvolvimento)
+1. Abra este projeto no Android Studio (Hedgehog ou mais recente).
+2. O Studio vai baixar as dependências automaticamente na primeira sincronização.
+3. Rode no seu celular (via USB, com depuração USB ativada) ou num emulador.
+
+### Opção 2 — GitHub Actions (gera o APK sem precisar instalar nada)
+1. Faça push deste repositório para o GitHub.
+2. Vá na aba **Actions** → o workflow `Build APK` roda automaticamente.
+3. Ao terminar, baixe o artefato `harmonic-debug-apk` — é o `.apk` pronto pra instalar no celular.
+
+> Nota: o `gradle-wrapper.jar` não foi commitado (é um binário) — o workflow do
+> GitHub Actions gera ele automaticamente antes de compilar. Se for abrir no
+> Android Studio, ele mesmo cuida disso na sincronização inicial.
 
 ## Arquitetura
 
-- **Kotlin + Jetpack Compose** (Material 3) — interface 100% declarativa
-- **Dois bancos de dados separados**:
-  - `biblia.db`: somente leitura, copiado dos assets no primeiro uso — o texto bíblico e a busca
-  - `user_data.db` (Room): favoritos, notas, destaques, histórico, progresso de leitura —
-    dados pessoais do usuário, nunca misturados com o texto bíblico
-- **DataStore Preferences**: tema e tamanho de fonte
-- Sem bibliotecas de anúncios, analytics ou rastreamento de qualquer tipo
-
-## Estrutura de pastas
-
 ```
-app/src/main/java/com/bibliasagrada/app/
-├── data/
-│   ├── db/            BibleDatabaseHelper (leitura + busca no biblia.db)
-│   ├── room/           Entidades e DAOs do user_data.db
-│   ├── model/          Book, Verse, SearchResult, ChapterRef
-│   └── repository/     BibleRepository (API única) + PreferencesManager
-├── ui/
-│   ├── theme/           Cores, tipografia, tema claro/escuro
-│   ├── navigation/      Rotas e NavHost
-│   ├── screens/         Todas as telas do app
-│   └── components/      VerseActionSheet (bottom sheet de ações do versículo)
-└── MainActivity.kt
+app/src/main/java/com/harmonic/player/
+├── MainActivity.kt          # Activity única, hospeda a navegação Compose
+├── HarmonicApp.kt           # Application: expõe database e settings
+├── data/                    # Room (Song, Playlist), MediaStoreScanner, SettingsRepository (DataStore)
+├── playback/                # PlaybackService (Media3) + PlayerController (ponte com a UI)
+└── ui/
+    ├── theme/               # Material You + cor de destaque customizável
+    ├── library/              # Tela de biblioteca
+    ├── nowplaying/            # Tela "Agora Tocando"
+    ├── settings/              # Aparência (cor + wallpaper)
+    └── common/                # Telas compartilhadas (permissão, etc.)
 ```
 
-## Próximos passos sugeridos (Fase 2, quando quiser evoluir)
+## Papéis de parede inclusos
 
-- Comparação entre traduções (a arquitetura já suporta múltiplos `biblia_<versao>.db`)
-- Planos de leitura e leitura cronológica
-- Backup local (exportar/importar favoritos, notas e destaques em JSON)
-- Widget de tela inicial com o "versículo do dia"
-- Referências cruzadas, usando datasets abertos como o do OpenBible.info
-
-## Licença do app
-
-O código-fonte deste projeto pode ser livremente redistribuído. O texto bíblico embutido
-segue a licença CC BY 3.0 BR da Bíblia Livre, descrita acima — mantenha os créditos.
+Os 5 fundos padrão ficam em `app/src/main/assets/default_wallpapers/`:
+leão em chamas, guitarra elétrica, toca-discos vintage, floresta encantada, cidade lo-fi.
