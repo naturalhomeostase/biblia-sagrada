@@ -9,25 +9,36 @@ import com.bibliasagrada.app.data.model.Translation
  *
  * As demais traduções NÃO são baixadas automaticamente pelo app — por
  * questão de direitos autorais, o app não hospeda nem redistribui esses
- * textos. Em vez disso, a tela de Traduções oferece um botão para o próprio
- * usuário baixar o arquivo de uma fonte externa (fora do app) e depois
- * importar esse arquivo manualmente — a responsabilidade pelo conteúdo e
- * pelos direitos de uso é de quem faz esse download.
+ * textos. Em vez disso, a tela de Traduções mostra, por tradução, um botão
+ * "Baixar no GitHub" (que só abre o link no navegador) e um botão
+ * "Importar arquivo" (que abre o seletor de arquivos do Android). A
+ * responsabilidade pelo conteúdo e pelos direitos de uso do arquivo baixado
+ * é de quem faz esse download.
  *
- * "Bíblia Fiel (ACF)": a Almeida Corrigida Fiel tem direitos reservados da
- * Sociedade Bíblica Trinitariana — cuidado extra recomendado (ver conversa
- * anterior sobre isso).
- * "Almeida 1911": a reimpressão de 1911 da tradução de João Ferreira de
- * Almeida é de domínio público pela idade; o arquivo específico da API
- * getBible é distribuído sob licença GPL — a mais tranquila das opções aqui.
- * "OpenBible": projeto com traduções de domínio público / geradas
- * automaticamente.
+ * Todas as fontes abaixo vêm do projeto damarals/biblias
+ * (https://github.com/damarals/biblias), uma coletânea de bíblias em
+ * português em formatos abertos (Zefania, SQLite no esquema do OpenLP, e
+ * JSON). A licença MIT desse projeto cobre só o código/toolkit em Python —
+ * os textos em si têm seus próprios direitos, listados no README do
+ * projeto:
+ *  - "Bíblia Fiel (ACF)": direitos reservados da Sociedade Bíblica
+ *    Trinitariana.
+ *  - "Almeida Revista e Corrigida (ARC)": direitos reservados da SBB
+ *    (Sociedade Bíblica do Brasil).
+ *  - "Nova Versão Internacional (NVI)": direitos reservados da Biblica.
+ *  - "Almeida 1911": de domínio público (marcada com † no README do
+ *    damarals/biblias).
+ *  - "NTLH": direitos reservados da SBB (ver TranslationsCatalog antes desta
+ *    entrada ter sido expandida, e a conversa sobre isso).
  *
  * Veja TranslationImporter.kt para o código que lê o arquivo importado (ele
- * reconhece automaticamente os três formatos: thiagobodruk/biblia, getBible
- * e openbible).
+ * reconhece automaticamente: o schema próprio do app, o schema SQLite do
+ * OpenLP usado pelo damarals/biblias, e três formatos de JSON de outros
+ * projetos).
  */
 object TranslationsCatalog {
+
+    private const val DAMARALS_BASE = "https://github.com/damarals/biblias/releases/latest/download"
 
     val BLIVRE = Translation(
         id = "blivre",
@@ -44,7 +55,8 @@ object TranslationsCatalog {
         subtitle = "Baixe fora do app e importe aqui",
         fileName = "biblia_fiel.db",
         downloadUrl = null,
-        builtIn = false
+        builtIn = false,
+        sourceUrl = "$DAMARALS_BASE/ACF.sqlite"
     )
 
     val ALMEIDA_1911 = Translation(
@@ -53,34 +65,30 @@ object TranslationsCatalog {
         subtitle = "Baixe fora do app e importe aqui",
         fileName = "biblia_almeida_1911.db",
         downloadUrl = null,
-        builtIn = false
+        builtIn = false,
+        sourceUrl = "$DAMARALS_BASE/ALM1911.sqlite"
     )
 
-    val OPEN_BIBLE = Translation(
-        id = "open_bible",
-        displayName = "OpenBible (PT)",
+    val NVI = Translation(
+        id = "nvi",
+        displayName = "Nova Versão Internacional (NVI)",
         subtitle = "Baixe fora do app e importe aqui",
-        fileName = "biblia_openbible.db",
+        fileName = "biblia_nvi.db",
         downloadUrl = null,
-        builtIn = false
+        builtIn = false,
+        sourceUrl = "$DAMARALS_BASE/NVI.sqlite"
     )
 
-    /** Link direto para o arquivo .sqlite da NTLH na última release do projeto
-     *  damarals/biblias (coletânea de bíblias em formatos abertos, MIT — mas
-     *  atenção: a licença MIT cobre só o código/toolkit; o texto da NTLH em si
-     *  pertence à SBB, como o próprio README do projeto deixa claro). */
-    const val EXTERNAL_SOURCE_URL_NTLH = "https://github.com/damarals/biblias/releases/latest/download/NTLH.sqlite"
+    val ARC = Translation(
+        id = "arc",
+        displayName = "Almeida Revista e Corrigida (ARC)",
+        subtitle = "Baixe fora do app e importe aqui",
+        fileName = "biblia_arc.db",
+        downloadUrl = null,
+        builtIn = false,
+        sourceUrl = "$DAMARALS_BASE/ARC.sqlite"
+    )
 
-    /**
-     * NTLH (Nova Tradução na Linguagem de Hoje): direitos reservados da SBB
-     * (Sociedade Bíblica do Brasil). O app NÃO baixa nem hospeda o texto —
-     * o botão "Baixar no GitHub" só abre a página de release do projeto
-     * damarals/biblias no navegador, para o próprio usuário baixar o arquivo
-     * .sqlite por conta própria; depois ele importa esse arquivo aqui do
-     * mesmo jeito que as outras traduções. Ver TranslationImporter.kt: esse
-     * .sqlite usa o schema do OpenLP (tabelas "book"/"verse"), reconhecido
-     * automaticamente e convertido para o schema interno do app.
-     */
     val NTLH = Translation(
         id = "ntlh",
         displayName = "Nova Tradução na Linguagem de Hoje (NTLH)",
@@ -88,15 +96,14 @@ object TranslationsCatalog {
         fileName = "biblia_ntlh.db",
         downloadUrl = null,
         builtIn = false,
-        sourceUrl = EXTERNAL_SOURCE_URL_NTLH
+        sourceUrl = "$DAMARALS_BASE/NTLH.sqlite"
     )
 
-    val all: List<Translation> = listOf(BLIVRE, FIEL, ALMEIDA_1911, OPEN_BIBLE, NTLH)
+    val all: List<Translation> = listOf(BLIVRE, FIEL, ALMEIDA_1911, NVI, ARC, NTLH)
 
     fun byFileName(fileName: String): Translation = all.firstOrNull { it.fileName == fileName } ?: BLIVRE
 
-    /** Fontes externas onde dá para baixar traduções adicionais, por conta própria. */
-    const val EXTERNAL_SOURCE_URL = "https://github.com/thiagobodruk/biblia"
-    const val EXTERNAL_SOURCE_URL_GETBIBLE = "https://api.getbible.net/v2/almeida.json"
-    const val EXTERNAL_SOURCE_URL_OPENBIBLE = "https://github.com/churchstudio-org/openbible"
+    /** Página do projeto damarals/biblias, para quem quiser ver o catálogo
+     *  completo de traduções disponíveis (além das já listadas acima). */
+    const val EXTERNAL_SOURCE_URL = "https://github.com/damarals/biblias"
 }

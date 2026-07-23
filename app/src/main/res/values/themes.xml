@@ -1,7 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Harmonic" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">@android:color/black</item>
+    <style name="Theme.BibliaSagrada" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <!-- Evita a tela branca ao abrir o app: usa a mesma cor de fundo do
+             tema (dourado) já na primeira tela, antes do Compose desenhar. -->
+        <item name="android:windowBackground">#FBF6ED</item>
     </style>
 </resources>

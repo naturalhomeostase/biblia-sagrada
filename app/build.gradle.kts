@@ -5,63 +5,60 @@ plugins {
 }
 
 android {
-    namespace = "com.harmonic.player"
+    namespace = "com.bibliasagrada.app"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.harmonic.player"
-        minSdk = 26 // Android 8.0 — cobre praticamente todos os aparelhos em uso
+        applicationId = "com.bibliasagrada.app"
+        minSdk = 26
         targetSdk = 34
-        // Sobe sozinho a cada build do GitHub Actions (usa o número da
-        // execução do workflow); em builds locais, sempre 1. Isso evita
-        // precisar lembrar de subir esse número manualmente toda hora.
-        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
-        versionName = "0.1.0-mvp"
+        versionCode = 1
+        versionName = "1.0"
 
-        vectorDrawables.useSupportLibrary = true
+        // Bíblia embutida como asset; nada é baixado da internet, garantindo uso 100% offline.
+        vectorDrawables { useSupportLibrary = true }
     }
 
-    // Chaves de assinatura FIXAS, commitadas no repositório (pasta
-    // /keystore) — o motivo de ter que "desinstalar a versão antiga" a
-    // cada teste era esse: sem uma chave fixa, cada máquina/execução do
-    // GitHub Actions gerava sua própria chave de debug do zero, e o
-    // Android bloqueia atualizar um app quando a assinatura muda.
-    //
-    // ATENÇÃO: a chave de release aqui é só pra testes/instalação própria
-    // — funciona perfeitamente pra gerar APK/AAB e instalar no celular,
-    // mas antes de publicar de verdade na Play Store algum dia, gere uma
-    // chave de release privada de verdade e NÃO a commite no repositório
-    // (principalmente se ele for público).
+    // O arquivo assets/biblia.db é grande (texto) e já vem compactado; evita recompressão no APK.
+    androidResources {
+        noCompress += "db"
+    }
+
+    // Assinatura de release: usada para gerar um APK com identidade estável
+    // (necessário para instalar sem o aviso extra de "app de depuração" e
+    // para poder futuramente publicar/atualizar o mesmo app). As credenciais
+    // vêm de variáveis de ambiente (definidas como Secrets no GitHub Actions)
+    // e NUNCA ficam no código-fonte. Se não estiverem definidas (ex.: build
+    // local sem as secrets), o app volta a usar a assinatura de debug comum,
+    // então nada quebra.
+    val releaseKeystorePath = System.getenv("RELEASE_KEYSTORE_PATH")
+    val releaseStorePassword = System.getenv("RELEASE_STORE_PASSWORD")
+    val releaseKeyAlias = System.getenv("RELEASE_KEY_ALIAS")
+    val releaseKeyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+    val hasReleaseSigning = !releaseKeystorePath.isNullOrBlank() &&
+        !releaseStorePassword.isNullOrBlank() &&
+        !releaseKeyAlias.isNullOrBlank() &&
+        !releaseKeyPassword.isNullOrBlank() &&
+        file(releaseKeystorePath).exists()
+
     signingConfigs {
-        getByName("debug") {
-            storeFile = file("../keystore/debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
-        }
-        create("release") {
-            storeFile = file("../keystore/release.keystore")
-            storePassword = "musicbox123"
-            keyAlias = "musicbox"
-            keyPassword = "musicbox123"
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(releaseKeystorePath!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
         }
     }
 
     buildTypes {
         release {
-            // Minificação desligada por enquanto: o app usa Room, Media3,
-            // Glance e uma lib de tags de áudio (jaudiotagger) que dependem
-            // bastante de reflexão — ligar o R8 sem regras de "keep" bem
-            // testadas é um jeito clássico de introduzir crash só na build
-            // de release. Deixei documentado abaixo pra quando quiser
-            // reativar com calma.
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("release")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-        }
-        debug {
-            isMinifyEnabled = false
-            applicationIdSuffix = ".debug"
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
@@ -71,24 +68,13 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
-        // APIs experimentais do Material3 (TopAppBar, ModalBottomSheet, etc.)
-        // são usadas o app inteiro — em vez de depender de lembrar o @OptIn
-        // em cada arquivo (foi exatamente isso que quebrou o build), liberamos
-        // globalmente aqui. Essas APIs já são consideradas estáveis na prática,
-        // só ainda carregam o rótulo "experimental" no Material3.
-        freeCompilerArgs += listOf(
-            "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api",
-            "-opt-in=androidx.compose.foundation.ExperimentalFoundationApi"
-        )
     }
-
     buildFeatures {
         compose = true
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.14"
     }
-
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -97,54 +83,27 @@ android {
 }
 
 dependencies {
-    // Core / Compose
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.4")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.4")
     implementation("androidx.activity:activity-compose:1.9.1")
+
+    // Compose
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.compose.foundation:foundation")
-    implementation("androidx.compose.foundation:foundation-layout")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.navigation:navigation-compose:2.7.7")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.4")
 
-    // Media3 (ExoPlayer + MediaSession) — motor de reprodução em segundo plano,
-    // notificação, controles de tela bloqueada, Bluetooth, Android Auto
-    implementation("androidx.media3:media3-exoplayer:1.4.0")
-    implementation("androidx.media3:media3-session:1.4.0")
-    implementation("androidx.media3:media3-ui:1.4.0")
-
-    // Room — banco local da biblioteca de músicas
+    // Room (dados do usuário: favoritos, notas, destaques, histórico)
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")
 
-    // DataStore — preferências (cor de destaque, fundo, pastas ignoradas, etc.)
+    // Preferências simples (tema, tamanho de fonte, última posição de leitura)
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
-    // Palette — extrair cor dominante da capa do álbum
-    implementation("androidx.palette:palette-ktx:1.0.0")
-
-    // Edição de tags reais (ID3/Vorbis/MP4...) direto no arquivo — fork do
-    // jaudiotagger sem dependências de java.awt, feito pra Android.
-    implementation("com.github.Adonai:jaudiotagger:2.3.15")
-
-    // Coil — carregar capas de álbum/imagens de fundo
-    implementation("io.coil-kt:coil-compose:2.6.0")
-
-    // Accompanist — permissões em runtime
-    implementation("com.google.accompanist:accompanist-permissions:0.34.0")
-
-    // Glance — widgets de tela inicial (Material You também nos widgets)
-    implementation("androidx.glance:glance-appwidget:1.1.0")
-    implementation("androidx.glance:glance-material3:1.1.0")
-
-    testImplementation("junit:junit:4.13.2")
-    androidTestImplementation("androidx.test.ext:junit:1.2.1")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

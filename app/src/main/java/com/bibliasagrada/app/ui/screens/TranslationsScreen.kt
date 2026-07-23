@@ -155,25 +155,7 @@ fun TranslationsScreen(
                             modifier = Modifier.padding(top = 4.dp)
                         ) {
                             Icon(Icons.Filled.OpenInNew, contentDescription = null, modifier = Modifier.padding(end = 6.dp))
-                            Text("Fonte: thiagobodruk/biblia (ACF, NVI...)")
-                        }
-                        TextButton(
-                            onClick = {
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(TranslationsCatalog.EXTERNAL_SOURCE_URL_GETBIBLE))
-                                context.startActivity(intent)
-                            }
-                        ) {
-                            Icon(Icons.Filled.OpenInNew, contentDescription = null, modifier = Modifier.padding(end = 6.dp))
-                            Text("Fonte: getBible (Almeida 1911)")
-                        }
-                        TextButton(
-                            onClick = {
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(TranslationsCatalog.EXTERNAL_SOURCE_URL_OPENBIBLE))
-                                context.startActivity(intent)
-                            }
-                        ) {
-                            Icon(Icons.Filled.OpenInNew, contentDescription = null, modifier = Modifier.padding(end = 6.dp))
-                            Text("Fonte: OpenBible")
+                            Text("Ver catálogo completo: damarals/biblias")
                         }
                     }
                 }
