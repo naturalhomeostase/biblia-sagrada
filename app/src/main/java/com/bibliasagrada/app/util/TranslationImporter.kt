@@ -18,13 +18,14 @@ import java.io.File
  * tem o direito de usar aquele conteúdo. Este código só faz a conversão
  * técnica do arquivo escolhido para o formato que o app consegue ler.
  *
- * Aceita dois formatos:
- *  - Um arquivo .db (SQLite) já no formato usado pelo app (tabelas `books`
- *    e `verses`) — nesse caso só copia o arquivo.
- *  - Um arquivo .json no formato usado pelo projeto
- *    github.com/thiagobodruk/biblia (uma lista com um objeto por livro,
- *    cada um com "chapters": uma lista de listas de textos de versículo) —
- *    nesse caso, converte para SQLite no próprio celular.
+ * Aceita um arquivo .db (SQLite) já no formato do app, ou um .json em
+ * qualquer um destes três formatos conhecidos:
+ *  - thiagobodruk/biblia: lista de 66 objetos, cada um com "chapters"
+ *    (lista de listas de texto de versículo);
+ *  - getBible (api.getbible.net): objeto com "books", cada um com
+ *    "chapters" (lista de objetos com "verses": lista de objetos com "text");
+ *  - churchstudio-org/openbible: lista de 66 listas (uma por livro), cada
+ *    uma já sendo diretamente a lista de capítulos (sem objeto por livro).
  */
 object TranslationImporter {
 
@@ -86,20 +87,114 @@ object TranslationImporter {
                 val isSqlite = bytes.size > 16 && String(bytes, 0, 16, Charsets.US_ASCII) == "SQLite format 3\u0000"
 
                 if (isSqlite) {
-                    copyRawDb(context, bytes, targetFileName)
-                } else {
-                    val text = String(bytes, Charsets.UTF_8).trim('\uFEFF', ' ', '\n', '\r', '\t')
-                    if (!text.startsWith("[")) {
-                        return@withContext ImportResult.Failure(
-                            "Formato não reconhecido. Escolha um arquivo .db do app, ou um .json no formato do projeto thiagobodruk/biblia."
-                        )
-                    }
-                    convertJsonToDb(text, targetFileName, context)
+                    return@withContext copyRawDb(context, bytes, targetFileName)
                 }
+
+                val text = String(bytes, Charsets.UTF_8).trim('\uFEFF', ' ', '\n', '\r', '\t')
+                val verses: List<VerseRow> = when {
+                    text.startsWith("{") -> parseGetBibleFormat(text)
+                    text.startsWith("[") -> {
+                        val arr = JSONArray(text)
+                        if (arr.length() == 0) {
+                            return@withContext ImportResult.Failure("Arquivo JSON vazio.")
+                        }
+                        // thiagobodruk: cada item é um objeto de livro com "chapters".
+                        // openbible: cada item já é diretamente uma lista de capítulos.
+                        if (arr.get(0) is org.json.JSONObject) {
+                            parseThiagobodrukFormat(arr)
+                        } else {
+                            parseOpenBibleFormat(arr)
+                        }
+                    }
+                    else -> return@withContext ImportResult.Failure(
+                        "Formato não reconhecido. Escolha um arquivo .db do app, ou um .json nos formatos " +
+                            "thiagobodruk/biblia, getBible ou openbible."
+                    )
+                }
+
+                if (verses.isEmpty()) {
+                    return@withContext ImportResult.Failure("Nenhum versículo encontrado nesse arquivo.")
+                }
+
+                buildDb(verses, targetFileName, context)
             } catch (e: Exception) {
                 ImportResult.Failure(e.message ?: "Erro desconhecido ao importar.")
             }
         }
+
+    private data class VerseRow(val bookId: Int, val chapter: Int, val verse: Int, val text: String)
+
+    /** Formato thiagobodruk/biblia: lista de 66 {abbrev, name, chapters: [[texto,...],...]}. */
+    private fun parseThiagobodrukFormat(jsonArray: JSONArray): List<VerseRow> {
+        if (jsonArray.length() != 66) {
+            throw IllegalStateException(
+                "O arquivo tem ${jsonArray.length()} livros; eram esperados 66. Verifique se é o arquivo certo."
+            )
+        }
+        val rows = mutableListOf<VerseRow>()
+        for (i in 0 until jsonArray.length()) {
+            val bookObj = jsonArray.getJSONObject(i)
+            val bookId = i + 1
+            val chaptersArr = bookObj.getJSONArray("chapters")
+            for (c in 0 until chaptersArr.length()) {
+                val versesArr = chaptersArr.getJSONArray(c)
+                for (v in 0 until versesArr.length()) {
+                    rows.add(VerseRow(bookId, c + 1, v + 1, versesArr.getString(v)))
+                }
+            }
+        }
+        return rows
+    }
+
+    /** Formato openbible (churchstudio-org): lista de 66 listas de capítulos (sem objeto por livro). */
+    private fun parseOpenBibleFormat(jsonArray: JSONArray): List<VerseRow> {
+        if (jsonArray.length() != 66) {
+            throw IllegalStateException(
+                "O arquivo tem ${jsonArray.length()} livros; eram esperados 66. Verifique se é o arquivo certo."
+            )
+        }
+        val rows = mutableListOf<VerseRow>()
+        for (i in 0 until jsonArray.length()) {
+            val bookId = i + 1
+            val chaptersArr = jsonArray.getJSONArray(i)
+            for (c in 0 until chaptersArr.length()) {
+                val versesArr = chaptersArr.getJSONArray(c)
+                for (v in 0 until versesArr.length()) {
+                    rows.add(VerseRow(bookId, c + 1, v + 1, versesArr.getString(v)))
+                }
+            }
+        }
+        return rows
+    }
+
+    /** Formato getBible (api.getbible.net): {"books":[{"nr":1,"chapters":[{"verses":[{"verse":1,"text":"..."}]}]}]}. */
+    private fun parseGetBibleFormat(jsonText: String): List<VerseRow> {
+        val root = org.json.JSONObject(jsonText)
+        val booksArr = root.optJSONArray("books")
+            ?: throw IllegalStateException("Arquivo não tem a chave \"books\" esperada do formato getBible.")
+        if (booksArr.length() != 66) {
+            throw IllegalStateException(
+                "O arquivo tem ${booksArr.length()} livros; eram esperados 66. Verifique se é o arquivo certo."
+            )
+        }
+        val rows = mutableListOf<VerseRow>()
+        for (i in 0 until booksArr.length()) {
+            val bookObj = booksArr.getJSONObject(i)
+            val bookId = i + 1
+            val chaptersArr = bookObj.getJSONArray("chapters")
+            for (c in 0 until chaptersArr.length()) {
+                val chapterObj = chaptersArr.getJSONObject(c)
+                val chapterNum = chapterObj.optInt("chapter", c + 1)
+                val versesArr = chapterObj.getJSONArray("verses")
+                for (v in 0 until versesArr.length()) {
+                    val verseObj = versesArr.getJSONObject(v)
+                    val verseNum = verseObj.optInt("verse", v + 1)
+                    rows.add(VerseRow(bookId, chapterNum, verseNum, verseObj.getString("text")))
+                }
+            }
+        }
+        return rows
+    }
 
     private fun copyRawDb(context: Context, bytes: ByteArray, targetFileName: String): ImportResult {
         val destFile = context.getDatabasePath(targetFileName)
@@ -111,14 +206,7 @@ object TranslationImporter {
         return ImportResult.Success
     }
 
-    private fun convertJsonToDb(jsonText: String, targetFileName: String, context: Context): ImportResult {
-        val jsonArray = JSONArray(jsonText)
-        if (jsonArray.length() != 66) {
-            return ImportResult.Failure(
-                "O arquivo tem ${jsonArray.length()} livros; eram esperados 66. Verifique se é o arquivo certo."
-            )
-        }
-
+    private fun buildDb(verses: List<VerseRow>, targetFileName: String, context: Context): ImportResult {
         val destFile = context.getDatabasePath(targetFileName)
         destFile.parentFile?.mkdirs()
         val tempFile = File(destFile.parentFile, "$targetFileName.importing")
@@ -158,21 +246,13 @@ object TranslationImporter {
                 val verseStmt = db.compileStatement(
                     "INSERT INTO verses (book_id, chapter, verse, text) VALUES (?,?,?,?)"
                 )
-                for (i in 0 until jsonArray.length()) {
-                    val bookObj = jsonArray.getJSONObject(i)
-                    val bookId = i + 1
-                    val chaptersArr = bookObj.getJSONArray("chapters")
-                    for (c in 0 until chaptersArr.length()) {
-                        val versesArr = chaptersArr.getJSONArray(c)
-                        for (v in 0 until versesArr.length()) {
-                            verseStmt.bindLong(1, bookId.toLong())
-                            verseStmt.bindLong(2, (c + 1).toLong())
-                            verseStmt.bindLong(3, (v + 1).toLong())
-                            verseStmt.bindString(4, versesArr.getString(v))
-                            verseStmt.executeInsert()
-                            verseStmt.clearBindings()
-                        }
-                    }
+                for (row in verses) {
+                    verseStmt.bindLong(1, row.bookId.toLong())
+                    verseStmt.bindLong(2, row.chapter.toLong())
+                    verseStmt.bindLong(3, row.verse.toLong())
+                    verseStmt.bindString(4, row.text)
+                    verseStmt.executeInsert()
+                    verseStmt.clearBindings()
                 }
                 db.setTransactionSuccessful()
             } finally {

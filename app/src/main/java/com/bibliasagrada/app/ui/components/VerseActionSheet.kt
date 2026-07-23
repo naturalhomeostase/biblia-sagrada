@@ -20,9 +20,9 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.FormatColorReset
-import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.HorizontalDivider
@@ -39,14 +39,23 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.bibliasagrada.app.data.model.Verse
 import com.bibliasagrada.app.ui.theme.LocalHighlightColors
 
+/**
+ * Menu de ações para um ou mais versículos selecionados.
+ *
+ * Quando [verses] tem mais de um item (seleção múltipla), o favoritar fica
+ * escondido (não faz sentido para vários versículos de uma vez) e a seção de
+ * nota também fica escondida, já que uma nota é sempre ligada a um único
+ * versículo específico no banco de dados. As demais ações (copiar,
+ * compartilhar, gerar imagem, marcar com cor) funcionam normalmente com
+ * todos os versículos selecionados juntos.
+ */
 @Composable
 fun VerseActionSheet(
-    verse: Verse,
+    verses: List<Verse>,
     isFavorite: Boolean,
     currentHighlight: String?,
     currentNote: String,
@@ -59,6 +68,7 @@ fun VerseActionSheet(
     onSaveNote: (String) -> Unit,
     onClose: () -> Unit
 ) {
+    val isSingle = verses.size == 1
     var noteText by remember(currentNote) { mutableStateOf(currentNote) }
 
     Column(
@@ -74,11 +84,22 @@ fun VerseActionSheet(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(verse.reference, style = MaterialTheme.typography.titleMedium)
+            Text(
+                if (isSingle) verses.first().reference else "${verses.size} versículos selecionados",
+                style = MaterialTheme.typography.titleMedium
+            )
             IconButton(onClick = onClose) { Icon(Icons.Filled.Close, contentDescription = "Fechar") }
         }
         Spacer(Modifier.height(4.dp))
-        Text(verse.text, style = MaterialTheme.typography.bodyLarge)
+        if (isSingle) {
+            Text(verses.first().text, style = MaterialTheme.typography.bodyLarge)
+        } else {
+            Text(
+                verses.joinToString("  ") { it.shortReference },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.secondary
+            )
+        }
         Spacer(Modifier.height(16.dp))
         HorizontalDivider()
         Spacer(Modifier.height(12.dp))
@@ -91,11 +112,13 @@ fun VerseActionSheet(
             ActionIcon(Icons.Filled.Share, "Enviar", onClick = onShare)
             ActionIcon(Icons.Filled.Image, "Imagem", onClick = onShareImage)
             ActionIcon(Icons.Filled.Download, "Salvar", onClick = onSaveImage)
-            ActionIcon(
-                if (isFavorite) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder,
-                "Favorito",
-                onClick = onToggleFavorite
-            )
+            if (isSingle) {
+                ActionIcon(
+                    if (isFavorite) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder,
+                    "Favorito",
+                    onClick = onToggleFavorite
+                )
+            }
         }
 
         Spacer(Modifier.height(16.dp))
@@ -124,24 +147,26 @@ fun VerseActionSheet(
             }
         }
 
-        Spacer(Modifier.height(16.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Filled.EditNote, contentDescription = null)
-            Spacer(Modifier.size(8.dp))
-            Text("Minha nota", style = MaterialTheme.typography.labelLarge)
-        }
-        Spacer(Modifier.height(8.dp))
-        OutlinedTextField(
-            value = noteText,
-            onValueChange = { noteText = it },
-            modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Escreva uma reflexão sobre este versículo...") },
-            minLines = 2
-        )
-        Spacer(Modifier.height(8.dp))
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            TextButton(onClick = { onSaveNote(noteText); onClose() }) {
-                Text("Salvar nota")
+        if (isSingle) {
+            Spacer(Modifier.height(16.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.EditNote, contentDescription = null)
+                Spacer(Modifier.size(8.dp))
+                Text("Minha nota", style = MaterialTheme.typography.labelLarge)
+            }
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = noteText,
+                onValueChange = { noteText = it },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text("Escreva uma reflexão sobre este versículo...") },
+                minLines = 2
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = { onSaveNote(noteText); onClose() }) {
+                    Text("Salvar nota")
+                }
             }
         }
     }

@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.AlertDialog
@@ -80,6 +81,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.bibliasagrada.app.R
 import com.bibliasagrada.app.data.model.ChapterRef
@@ -214,7 +218,7 @@ fun ReaderScreen(
     }
 
     val pagerState = rememberPagerState(initialPage = startPageValue) { chapterRefs.size }
-    var selectedVerse by remember { mutableStateOf<Verse?>(null) }
+    var selectedVerses by remember { mutableStateOf<List<Verse>?>(null) }
     var showBookmarkDialog by remember { mutableStateOf(false) }
     var showQuickSettings by remember { mutableStateOf(false) }
     var previousPage by remember { mutableStateOf(startPageValue) }
@@ -309,11 +313,11 @@ fun ReaderScreen(
                     ref = ref,
                     fontScale = fontScale,
                     scrollToVerse = if (page == startPageValue && initialVerse > 0) initialVerse else null,
-                    onVerseClick = { verse -> selectedVerse = verse },
+                    onVerseClick = { verse -> selectedVerses = listOf(verse) },
                     onFontScaleChange = { newScale ->
                         scope.launch { repository.prefs.setFontScale(newScale.coerceIn(MIN_FONT_SCALE, MAX_FONT_SCALE)) }
                     },
-                    onShareVerses = { verses -> shareVersesAsImage(context, verses, quoteImageTheme) }
+                    onShareVerses = { verses -> selectedVerses = verses }
                 )
             }
 
@@ -399,54 +403,66 @@ fun ReaderScreen(
         )
     }
 
-    selectedVerse?.let { verse ->
+    selectedVerses?.let { verses ->
         val sheetState = rememberModalBottomSheetState()
-        var isFavorite by remember(verse) { mutableStateOf(false) }
-        var highlight by remember(verse) { mutableStateOf<String?>(null) }
-        var noteText by remember(verse) { mutableStateOf("") }
-        var existingNote by remember(verse) { mutableStateOf<NoteEntity?>(null) }
+        val singleVerse = verses.singleOrNull()
+        var isFavorite by remember(verses) { mutableStateOf(false) }
+        var highlight by remember(verses) { mutableStateOf<String?>(null) }
+        var noteText by remember(verses) { mutableStateOf("") }
+        var existingNote by remember(verses) { mutableStateOf<NoteEntity?>(null) }
 
-        LaunchedEffect(verse) {
-            isFavorite = repository.isFavorite(verse.bookId, verse.chapter, verse.verse)
-            highlight = repository.getHighlightForVerse(verse.bookId, verse.chapter, verse.verse)
-            existingNote = repository.getNoteForVerse(verse.bookId, verse.chapter, verse.verse)
-            noteText = existingNote?.text ?: ""
+        LaunchedEffect(verses) {
+            if (singleVerse != null) {
+                isFavorite = repository.isFavorite(singleVerse.bookId, singleVerse.chapter, singleVerse.verse)
+                highlight = repository.getHighlightForVerse(singleVerse.bookId, singleVerse.chapter, singleVerse.verse)
+                existingNote = repository.getNoteForVerse(singleVerse.bookId, singleVerse.chapter, singleVerse.verse)
+                noteText = existingNote?.text ?: ""
+            }
         }
 
-        ModalBottomSheet(onDismissRequest = { selectedVerse = null }, sheetState = sheetState) {
+        val combinedText = verses.joinToString(" ") { it.text.trim() }
+        val combinedReference = if (singleVerse != null) singleVerse.reference else verses.joinToString(", ") { it.shortReference }
+
+        ModalBottomSheet(onDismissRequest = { selectedVerses = null }, sheetState = sheetState) {
             VerseActionSheet(
-                verse = verse,
+                verses = verses,
                 isFavorite = isFavorite,
                 currentHighlight = highlight,
                 currentNote = noteText,
                 onCopy = {
-                    clipboard.setText(AnnotatedString("${verse.text} (${verse.reference})"))
+                    clipboard.setText(AnnotatedString("$combinedText ($combinedReference)"))
                 },
                 onShare = {
                     val sendIntent = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
-                        putExtra(Intent.EXTRA_TEXT, "\"${verse.text}\" — ${verse.reference}")
+                        putExtra(Intent.EXTRA_TEXT, "\"$combinedText\" — $combinedReference")
                     }
                     context.startActivity(Intent.createChooser(sendIntent, null))
                 },
-                onShareImage = { shareVersesAsImage(context, listOf(verse), quoteImageTheme) },
-                onSaveImage = { saveVerseImage(listOf(verse)) },
+                onShareImage = { shareVersesAsImage(context, verses, quoteImageTheme) },
+                onSaveImage = { saveVerseImage(verses) },
                 onToggleFavorite = {
-                    scope.launch {
-                        repository.toggleFavorite(verse.bookId, verse.chapter, verse.verse)
-                        isFavorite = !isFavorite
+                    singleVerse?.let { v ->
+                        scope.launch {
+                            repository.toggleFavorite(v.bookId, v.chapter, v.verse)
+                            isFavorite = !isFavorite
+                        }
                     }
                 },
                 onSetHighlight = { color ->
                     highlight = color
-                    scope.launch { repository.setHighlight(verse.bookId, verse.chapter, verse.verse, color) }
-                },
-                onSaveNote = { text ->
                     scope.launch {
-                        repository.saveNote(existingNote, verse.bookId, verse.chapter, verse.verse, text)
+                        verses.forEach { v -> repository.setHighlight(v.bookId, v.chapter, v.verse, color) }
                     }
                 },
-                onClose = { selectedVerse = null }
+                onSaveNote = { text ->
+                    singleVerse?.let { v ->
+                        scope.launch {
+                            repository.saveNote(existingNote, v.bookId, v.chapter, v.verse, text)
+                        }
+                    }
+                },
+                onClose = { selectedVerses = null }
             )
         }
     }
@@ -602,8 +618,8 @@ private fun SelectionBar(
                 modifier = Modifier.padding(horizontal = 4.dp)
             )
             Button(onClick = onShare, modifier = Modifier.padding(start = 8.dp)) {
-                Icon(Icons.Filled.Image, contentDescription = null, modifier = Modifier.padding(end = 6.dp))
-                Text("Compartilhar")
+                Icon(Icons.Filled.MoreVert, contentDescription = null, modifier = Modifier.padding(end = 6.dp))
+                Text("Ações")
             }
         }
     }
@@ -731,13 +747,13 @@ private fun ChapterPage(
                     )
                     Text(
                         text = if (bgColor != null && !isSelected) {
-                            androidx.compose.ui.text.buildAnnotatedString {
-                                withStyle(androidx.compose.ui.text.SpanStyle(background = bgColor)) {
+                            buildAnnotatedString {
+                                withStyle(SpanStyle(background = bgColor)) {
                                     append(verse.text)
                                 }
                             }
                         } else {
-                            androidx.compose.ui.text.AnnotatedString(verse.text)
+                            AnnotatedString(verse.text)
                         },
                         style = readingTextStyle(liveFontScale)
                     )
