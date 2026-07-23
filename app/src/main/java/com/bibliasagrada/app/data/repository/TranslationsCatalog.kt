@@ -65,7 +65,33 @@ object TranslationsCatalog {
         builtIn = false
     )
 
-    val all: List<Translation> = listOf(BLIVRE, FIEL, ALMEIDA_1911, OPEN_BIBLE)
+    /** Link direto para o arquivo .sqlite da NTLH na última release do projeto
+     *  damarals/biblias (coletânea de bíblias em formatos abertos, MIT — mas
+     *  atenção: a licença MIT cobre só o código/toolkit; o texto da NTLH em si
+     *  pertence à SBB, como o próprio README do projeto deixa claro). */
+    const val EXTERNAL_SOURCE_URL_NTLH = "https://github.com/damarals/biblias/releases/latest/download/NTLH.sqlite"
+
+    /**
+     * NTLH (Nova Tradução na Linguagem de Hoje): direitos reservados da SBB
+     * (Sociedade Bíblica do Brasil). O app NÃO baixa nem hospeda o texto —
+     * o botão "Baixar no GitHub" só abre a página de release do projeto
+     * damarals/biblias no navegador, para o próprio usuário baixar o arquivo
+     * .sqlite por conta própria; depois ele importa esse arquivo aqui do
+     * mesmo jeito que as outras traduções. Ver TranslationImporter.kt: esse
+     * .sqlite usa o schema do OpenLP (tabelas "book"/"verse"), reconhecido
+     * automaticamente e convertido para o schema interno do app.
+     */
+    val NTLH = Translation(
+        id = "ntlh",
+        displayName = "Nova Tradução na Linguagem de Hoje (NTLH)",
+        subtitle = "Baixe fora do app e importe aqui",
+        fileName = "biblia_ntlh.db",
+        downloadUrl = null,
+        builtIn = false,
+        sourceUrl = EXTERNAL_SOURCE_URL_NTLH
+    )
+
+    val all: List<Translation> = listOf(BLIVRE, FIEL, ALMEIDA_1911, OPEN_BIBLE, NTLH)
 
     fun byFileName(fileName: String): Translation = all.firstOrNull { it.fileName == fileName } ?: BLIVRE
 

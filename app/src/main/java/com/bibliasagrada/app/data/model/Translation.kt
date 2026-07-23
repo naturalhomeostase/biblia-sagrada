@@ -19,5 +19,12 @@ data class Translation(
     val subtitle: String,
     val fileName: String,
     val downloadUrl: String?,
-    val builtIn: Boolean
+    val builtIn: Boolean,
+    /** Link para a página/arquivo de download numa fonte externa, aberto no
+     *  navegador (o app não baixa nada sozinho). Usado para mostrar um botão
+     *  "Baixar no GitHub" (ou similar) direto no card dessa tradução, além do
+     *  botão genérico de importar arquivo. Null quando não há uma fonte
+     *  específica de destaque (o usuário ainda pode usar os links genéricos
+     *  do topo da tela). */
+    val sourceUrl: String? = null
 )

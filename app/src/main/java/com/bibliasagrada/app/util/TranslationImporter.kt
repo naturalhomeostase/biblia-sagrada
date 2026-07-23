@@ -18,8 +18,13 @@ import java.io.File
  * tem o direito de usar aquele conteúdo. Este código só faz a conversão
  * técnica do arquivo escolhido para o formato que o app consegue ler.
  *
- * Aceita um arquivo .db (SQLite) já no formato do app, ou um .json em
- * qualquer um destes três formatos conhecidos:
+ * Aceita um arquivo SQLite em um destes dois esquemas:
+ *  - já no formato do app (tabelas "books"/"verses"): copiado direto;
+ *  - esquema do OpenLP (tabelas "metadata"/"book"/"verse", com "book" tendo
+ *    a coluna "book_reference_id" de 1 a 66 na ordem canônica): convertido
+ *    automaticamente. É o formato usado pelo projeto damarals/biblias
+ *    (ex.: NTLH.sqlite).
+ * ou um .json em qualquer um destes três formatos conhecidos:
  *  - thiagobodruk/biblia: lista de 66 objetos, cada um com "chapters"
  *    (lista de listas de texto de versículo);
  *  - getBible (api.getbible.net): objeto com "books", cada um com
@@ -87,7 +92,7 @@ object TranslationImporter {
                 val isSqlite = bytes.size > 16 && String(bytes, 0, 16, Charsets.US_ASCII) == "SQLite format 3\u0000"
 
                 if (isSqlite) {
-                    return@withContext copyRawDb(context, bytes, targetFileName)
+                    return@withContext importSqlite(context, bytes, targetFileName)
                 }
 
                 val text = String(bytes, Charsets.UTF_8).trim('\uFEFF', ' ', '\n', '\r', '\t')
@@ -192,6 +197,87 @@ object TranslationImporter {
                     rows.add(VerseRow(bookId, chapterNum, verseNum, verseObj.getString("text")))
                 }
             }
+        }
+        return rows
+    }
+
+    /** Recebe os bytes de um arquivo .sqlite/.db, descobre se já está no
+     *  esquema do app ("books"/"verses") ou no esquema do OpenLP
+     *  ("book"/"verse", usado pelo damarals/biblias), e importa de acordo. */
+    private fun importSqlite(context: Context, bytes: ByteArray, targetFileName: String): ImportResult {
+        val tempSourceFile = File(context.cacheDir, "$targetFileName.source.tmp")
+        tempSourceFile.writeBytes(bytes)
+        try {
+            val db = SQLiteDatabase.openDatabase(
+                tempSourceFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY
+            )
+            val tableNames = mutableSetOf<String>()
+            db.rawQuery("SELECT name FROM sqlite_master WHERE type='table'", null).use { cursor ->
+                while (cursor.moveToNext()) tableNames.add(cursor.getString(0).lowercase())
+            }
+
+            return when {
+                "books" in tableNames && "verses" in tableNames -> {
+                    db.close()
+                    copyRawDb(context, bytes, targetFileName)
+                }
+                "book" in tableNames && "verse" in tableNames -> {
+                    val verses = try {
+                        parseOpenLpFormat(db)
+                    } finally {
+                        db.close()
+                    }
+                    if (verses.isEmpty()) {
+                        ImportResult.Failure("Nenhum versículo encontrado nesse arquivo.")
+                    } else {
+                        buildDb(verses, targetFileName, context)
+                    }
+                }
+                else -> {
+                    db.close()
+                    ImportResult.Failure(
+                        "Esquema de banco de dados não reconhecido. Escolha um arquivo .db do app, " +
+                            "um .sqlite no esquema do OpenLP, ou um .json nos formatos thiagobodruk/biblia, " +
+                            "getBible ou openbible."
+                    )
+                }
+            }
+        } finally {
+            tempSourceFile.delete()
+        }
+    }
+
+    /** Formato OpenLP (usado por damarals/biblias, ex. NTLH.sqlite):
+     *  tabela "book" (id, book_reference_id 1..66 em ordem canônica, ...) e
+     *  tabela "verse" (book_id -> book.id, chapter, verse, text). */
+    private fun parseOpenLpFormat(db: SQLiteDatabase): List<VerseRow> {
+        val rows = mutableListOf<VerseRow>()
+        val query = """
+            SELECT b.book_reference_id, v.chapter, v.verse, v.text
+            FROM verse v JOIN book b ON v.book_id = b.id
+        """.trimIndent()
+        db.rawQuery(query, null).use { cursor ->
+            val bookIdx = cursor.getColumnIndexOrThrow("book_reference_id")
+            val chapterIdx = cursor.getColumnIndexOrThrow("chapter")
+            val verseIdx = cursor.getColumnIndexOrThrow("verse")
+            val textIdx = cursor.getColumnIndexOrThrow("text")
+            while (cursor.moveToNext()) {
+                rows.add(
+                    VerseRow(
+                        bookId = cursor.getInt(bookIdx),
+                        chapter = cursor.getInt(chapterIdx),
+                        verse = cursor.getInt(verseIdx),
+                        text = cursor.getString(textIdx)
+                    )
+                )
+            }
+        }
+        val distinctBooks = rows.map { it.bookId }.toSet()
+        if (distinctBooks.size !in 1..66 || distinctBooks.any { it !in 1..66 }) {
+            throw IllegalStateException(
+                "Os identificadores de livro desse arquivo não estão no intervalo esperado (1 a 66). " +
+                    "Verifique se é realmente um banco no esquema do OpenLP."
+            )
         }
         return rows
     }

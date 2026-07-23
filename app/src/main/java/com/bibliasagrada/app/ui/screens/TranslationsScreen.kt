@@ -233,6 +233,19 @@ fun TranslationsScreen(
                                     }
                                 }
                                 !isDownloaded -> {
+                                    if (translation.sourceUrl != null) {
+                                        OutlinedButton(
+                                            onClick = {
+                                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(translation.sourceUrl))
+                                                context.startActivity(intent)
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Icon(Icons.Filled.OpenInNew, contentDescription = null, modifier = Modifier.padding(end = 6.dp))
+                                            Text("Baixar no GitHub")
+                                        }
+                                        Spacer(Modifier.padding(top = 8.dp))
+                                    }
                                     Button(
                                         onClick = {
                                             importTargetFileName = translation.fileName
