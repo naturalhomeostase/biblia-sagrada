@@ -85,7 +85,7 @@ fun AppNavGraph(repository: BibleRepository) {
                 repository = repository,
                 bookId = bookId,
                 onBack = { navController.popBackStack() },
-                onOpenChapter = { chapter -> navController.navigate(Routes.reader(bookId, chapter)) }
+                onOpenChapter = { openedBookId, chapter -> navController.navigate(Routes.reader(openedBookId, chapter)) }
             )
         }
         composable(

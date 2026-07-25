@@ -75,6 +75,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -386,23 +388,17 @@ fun ReaderScreen(
         val allBookmarkNames = remember(allBookmarks) {
             allBookmarks.map { it.name }.filter { it.isNotBlank() }.distinct().sorted()
         }
-        // Agora só existe no máximo 1 marcador por capítulo (ver BookmarkEntity),
-        // então bookmarksInChapter tem 0 ou 1 item.
-        val currentBookmark = bookmarksInChapter.firstOrNull()
         BookmarkDialog(
-            currentName = currentBookmark?.name ?: "",
-            currentColor = currentBookmark?.color,
             isBookmarked = isChapterBookmarked,
+            existingNames = bookmarksInChapter.map { it.name },
             allBookmarkNames = allBookmarkNames,
             getColorForName = { n -> repository.getBookmarkColorForName(n) },
             onDismiss = { showBookmarkDialog = false },
             onSave = { name, color ->
-                // addBookmark usa REPLACE + índice único (bookId, chapter): se já havia
-                // um marcador neste capítulo, ele é substituído por este, nunca somado.
                 scope.launch { repository.addBookmark(currentRef.bookId, currentRef.chapter, name, color) }
                 showBookmarkDialog = false
             },
-            onRemove = {
+            onRemoveAll = {
                 scope.launch { repository.removeBookmarksForChapter(currentRef.bookId, currentRef.chapter) }
                 showBookmarkDialog = false
             }
@@ -480,21 +476,17 @@ fun ReaderScreen(
  *  esse marcador (salvar substitui os dados existentes). */
 @Composable
 private fun BookmarkDialog(
-    currentName: String,
-    currentColor: String?,
     isBookmarked: Boolean,
+    existingNames: List<String>,
     allBookmarkNames: List<String>,
     getColorForName: suspend (String) -> String?,
     onDismiss: () -> Unit,
     onSave: (String, String?) -> Unit,
-    onRemove: () -> Unit
+    onRemoveAll: () -> Unit
 ) {
-    var name by remember { mutableStateOf(currentName) }
-    var selectedColor by remember { mutableStateOf(currentColor) }
-    // Evita que o auto-preenchimento de cor dispare já na primeira composição
-    // (quando editamos um marcador existente, currentName/currentColor já
-    // vêm preenchidos e não devem ser sobrescritos).
-    var lastAutoFilledName by remember { mutableStateOf(currentName) }
+    var name by remember { mutableStateOf("") }
+    var selectedColor by remember { mutableStateOf<String?>(null) }
+    var lastAutoFilledName by remember { mutableStateOf("") }
     val highlightColors = LocalHighlightColors.current
 
     // Quando o nome muda para um valor que já foi usado antes (com cor
@@ -510,22 +502,30 @@ private fun BookmarkDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (isBookmarked) "Editar marcador" else "Marcar esta página") },
+        title = { Text(if (isBookmarked) "Página marcada" else "Marcar esta página") },
         text = {
             Column {
-                Text(
-                    if (isBookmarked) {
-                        "Esta página já tem um marcador. Você pode renomear, trocar a cor, " +
-                            "ou removê-lo abaixo."
-                    } else {
-                        "Dar um nome é opcional — ajuda a lembrar por que você salvou esta página. " +
-                            "Cada capítulo pode ter só um marcador."
-                    },
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                if (isBookmarked) {
+                    Text(
+                        "Marcadores nesta página: " + existingNames.joinToString(", "),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        "Você pode adicionar outro marcador (label), ou remover todos os deste capítulo. " +
+                            "Quando há mais de um marcador no mesmo capítulo, a fita usa a cor do tema " +
+                            "em vez de uma cor específica.",
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                } else {
+                    Text(
+                        "Dar um nome é opcional — ajuda a lembrar por que você salvou esta página.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
                 if (allBookmarkNames.isNotEmpty()) {
                     Text(
-                        "Usar um nome existente (repete a cor usada nele):",
+                        "Usar um marcador existente (repete a cor usada nele):",
                         style = MaterialTheme.typography.labelMedium,
                         modifier = Modifier.padding(top = 12.dp, bottom = 6.dp)
                     )
@@ -582,7 +582,7 @@ private fun BookmarkDialog(
         },
         dismissButton = {
             if (isBookmarked) {
-                TextButton(onClick = onRemove) { Text("Remover marcador") }
+                TextButton(onClick = onRemoveAll) { Text("Remover marcadores") }
             } else {
                 TextButton(onClick = onDismiss) { Text("Cancelar") }
             }
@@ -764,10 +764,15 @@ private fun ChapterPage(
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
-                    // A marcação usa o mesmo mecanismo de desenho da seleção nativa de
-                    // texto (getPathForRange), que segue exatamente os contornos das
-                    // letras — diferente de SpanStyle(background=...), que pinta a caixa
-                    // cheia da linha e acaba cobrindo o espaço em branco entre linhas.
+                    // getPathForRange (usado na versão anterior) é o mesmo mecanismo da
+                    // SELEÇÃO de texto, que sempre estende o retângulo até a margem da
+                    // linha quando o texto continua na linha de baixo — não é o que
+                    // queremos aqui. Em vez disso, calculamos manualmente um retângulo
+                    // por linha usando os limites reais dos caracteres (getBoundingBox):
+                    // do início ao último caractere visível de cada linha (sem contar
+                    // espaço em branco final), com altura igual à caixa do próprio
+                    // caractere — não à altura cheia da linha (que inclui o
+                    // entrelinhamento/leading, e por isso "grudava" nas linhas vizinhas).
                     var textLayoutResult by remember(verse) { mutableStateOf<TextLayoutResult?>(null) }
                     Text(
                         text = verse.text,
@@ -776,8 +781,20 @@ private fun ChapterPage(
                         modifier = Modifier.drawBehind {
                             if (bgColor != null && !isSelected) {
                                 textLayoutResult?.let { layout ->
-                                    val path = layout.getPathForRange(0, verse.text.length)
-                                    drawPath(path, color = bgColor)
+                                    for (lineIndex in 0 until layout.lineCount) {
+                                        val lineStart = layout.getLineStart(lineIndex)
+                                        val lineEnd = layout.getLineEnd(lineIndex, visibleEnd = true)
+                                        if (lineEnd <= lineStart) continue // linha em branco
+                                        val firstBox = layout.getBoundingBox(lineStart)
+                                        val lastBox = layout.getBoundingBox(lineEnd - 1)
+                                        val top = minOf(firstBox.top, lastBox.top)
+                                        val bottom = maxOf(firstBox.bottom, lastBox.bottom)
+                                        drawRect(
+                                            color = bgColor,
+                                            topLeft = Offset(firstBox.left, top),
+                                            size = Size(lastBox.right - firstBox.left, bottom - top)
+                                        )
+                                    }
                                 }
                             }
                         }
