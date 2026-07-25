@@ -167,6 +167,9 @@ class BibleRepository(private val appContext: Context) {
     suspend fun addBookmark(bookId: Int, chapter: Int, name: String, color: String? = null) {
         userDb.bookmarkDao().insert(BookmarkEntity(bookId = bookId, chapter = chapter, name = name, color = color))
     }
+    /** Cor lembrada para esse nome de marcador (da última vez que foi usado com cor), ou null. */
+    suspend fun getBookmarkColorForName(name: String): String? =
+        if (name.isBlank()) null else userDb.bookmarkDao().getColorForName(name)
     suspend fun removeBookmark(id: Long) {
         userDb.bookmarkDao().deleteById(id)
     }

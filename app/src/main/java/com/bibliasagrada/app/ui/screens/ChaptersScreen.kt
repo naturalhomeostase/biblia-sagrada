@@ -48,13 +48,11 @@ fun ChaptersScreen(
     var book by remember { mutableStateOf<Book?>(null) }
     val bookmarkedChapters by remember(bookId) { repository.observeBookmarksForBook(bookId) }
         .collectAsState(initial = emptyList())
-    // Para cada capítulo marcado: se todos os marcadores dele têm a mesma cor,
-    // usa essa cor na fita; se houver cores diferentes no mesmo capítulo, usa
-    // a cor padrão do tema (mesma regra usada para o ícone ao lado do livro).
+    // Cada capítulo tem no máximo 1 marcador agora (ver índice único em
+    // BookmarkEntity), então a cor da fita é sempre a cor exata desse
+    // marcador — sem mais o caso ambíguo de cair para a cor do tema.
     val colorByChapter = remember(bookmarkedChapters) {
-        bookmarkedChapters.groupBy { it.chapter }.mapValues { (_, marks) ->
-            marks.map { it.color }.distinct().let { if (it.size == 1) it.first() else null }
-        }
+        bookmarkedChapters.associate { it.chapter to it.color }
     }
     val highlightColors = LocalHighlightColors.current
 

@@ -1,6 +1,7 @@
 package com.bibliasagrada.app.data.room
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 @Entity(tableName = "favorites", primaryKeys = ["bookId", "chapter", "verse"])
@@ -37,7 +38,16 @@ data class HistoryEntity(
     val lastReadAt: Long = System.currentTimeMillis()
 )
 
-@Entity(tableName = "bookmarks")
+@Entity(
+    tableName = "bookmarks",
+    // No máximo um marcador por capítulo (bookId+chapter) — isso evita o caso
+    // de um capítulo acabar com dois marcadores de cores diferentes, o que
+    // deixava ambíguo qual cor mostrar na fita/ícone (caía para a cor do
+    // tema). Nomes (labels) diferentes continuam livres — só não podem
+    // coexistir no mesmo capítulo; o INSERT usa REPLACE, então salvar um
+    // novo marcador num capítulo já marcado substitui o anterior.
+    indices = [Index(value = ["bookId", "chapter"], unique = true)]
+)
 data class BookmarkEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val bookId: Int,

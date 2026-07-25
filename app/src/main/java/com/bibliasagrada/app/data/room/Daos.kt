@@ -97,6 +97,12 @@ interface BookmarkDao {
     @Query("SELECT * FROM bookmarks WHERE bookId=:bookId ORDER BY chapter ASC")
     fun observeForBook(bookId: Int): Flow<List<BookmarkEntity>>
 
+    /** Cor usada da última vez que esse nome de marcador foi salvo com uma cor
+     *  definida — usada para pré-preencher a cor automaticamente quando o
+     *  nome se repete. */
+    @Query("SELECT color FROM bookmarks WHERE name=:name AND color IS NOT NULL ORDER BY createdAt DESC LIMIT 1")
+    suspend fun getColorForName(name: String): String?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(entity: BookmarkEntity): Long
 
