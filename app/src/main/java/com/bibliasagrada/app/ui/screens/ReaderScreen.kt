@@ -419,7 +419,11 @@ fun ReaderScreen(
     }
 
     selectedVerses?.let { verses ->
-        val sheetState = rememberModalBottomSheetState()
+        // skipPartiallyExpanded = true: a caixa já abre totalmente expandida,
+        // mostrando de cara as cores de marcação e a caixa de notas — sem
+        // precisar arrastar pra cima (quem não conhece o app não vai adivinhar
+        // isso sozinho).
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val singleVerse = verses.singleOrNull()
         var isFavorite by remember(verses) { mutableStateOf(false) }
         var highlight by remember(verses) { mutableStateOf<String?>(null) }
