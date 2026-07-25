@@ -1,5 +1,6 @@
 package com.bibliasagrada.app.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -7,6 +8,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Bookmarks
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -35,7 +38,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun SettingsScreen(
     repository: BibleRepository,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onBookmarks: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
     val fontScale by repository.prefs.fontScale.collectAsState(initial = 1.0f)
@@ -102,6 +106,26 @@ fun SettingsScreen(
                     checked = soundEnabled,
                     onCheckedChange = { scope.launch { repository.prefs.setPageTurnSoundEnabled(it) } }
                 )
+            }
+
+            Text("Marcadores", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 24.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onBookmarks)
+                    .padding(vertical = 10.dp),
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Filled.Bookmarks,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 12.dp)
+                    )
+                    Text("Ver todos os marcadores")
+                }
+                Icon(Icons.Filled.ChevronRight, contentDescription = null)
             }
         }
     }

@@ -394,8 +394,21 @@ fun ReaderScreen(
             allBookmarkNames = allBookmarkNames,
             getColorForName = { n -> repository.getBookmarkColorForName(n) },
             onDismiss = { showBookmarkDialog = false },
-            onSave = { name, color ->
-                scope.launch { repository.addBookmark(currentRef.bookId, currentRef.chapter, name, color) }
+            onSave = { newName, selectedExisting, newColor ->
+                scope.launch {
+                    // Cada rótulo já existente marcado mantém a própria cor lembrada
+                    // (uma cor por rótulo, não uma cor só pra tudo que for salvo agora).
+                    selectedExisting.forEach { existingName ->
+                        val color = repository.getBookmarkColorForName(existingName)
+                        repository.addBookmark(currentRef.bookId, currentRef.chapter, existingName, color)
+                    }
+                    if (newName.isNotBlank()) {
+                        repository.addBookmark(currentRef.bookId, currentRef.chapter, newName, newColor)
+                    } else if (selectedExisting.isEmpty()) {
+                        // Nada selecionado e nenhum nome novo: marca a página sem nome.
+                        repository.addBookmark(currentRef.bookId, currentRef.chapter, "", newColor)
+                    }
+                }
                 showBookmarkDialog = false
             },
             onRemoveAll = {
@@ -470,10 +483,9 @@ fun ReaderScreen(
     }
 }
 
-/** Diálogo para nomear (opcionalmente) o marcador desta página e escolher uma
- *  cor, ou remover o marcador do capítulo atual. Só existe no máximo 1
- *  marcador por capítulo: se a página já está marcada, este diálogo edita
- *  esse marcador (salvar substitui os dados existentes). */
+/** Diálogo para marcar esta página com um ou mais rótulos: pode selecionar
+ *  vários rótulos já existentes ao mesmo tempo (cada um mantém sua própria
+ *  cor lembrada), e/ou criar um rótulo novo com uma cor à sua escolha. */
 @Composable
 private fun BookmarkDialog(
     isBookmarked: Boolean,
@@ -481,22 +493,28 @@ private fun BookmarkDialog(
     allBookmarkNames: List<String>,
     getColorForName: suspend (String) -> String?,
     onDismiss: () -> Unit,
-    onSave: (String, String?) -> Unit,
+    onSave: (newName: String, selectedExisting: Set<String>, newColor: String?) -> Unit,
     onRemoveAll: () -> Unit
 ) {
-    var name by remember { mutableStateOf("") }
+    var newName by remember { mutableStateOf("") }
+    var selectedExisting by remember { mutableStateOf(setOf<String>()) }
     var selectedColor by remember { mutableStateOf<String?>(null) }
     var lastAutoFilledName by remember { mutableStateOf("") }
     val highlightColors = LocalHighlightColors.current
 
-    // Quando o nome muda para um valor que já foi usado antes (com cor
-    // definida), repete automaticamente aquela cor — a menos que o usuário
-    // já tenha escolhido manualmente uma cor diferente depois dessa mudança
-    // de nome (nesse caso o clique manual, que acontece depois, prevalece).
-    LaunchedEffect(name) {
-        if (name.isNotBlank() && name != lastAutoFilledName) {
-            lastAutoFilledName = name
-            getColorForName(name)?.let { rememberedColor -> selectedColor = rememberedColor }
+    // Selecionáveis: rótulos já existentes, exceto os que já estão nesta página.
+    val selectableNames = remember(allBookmarkNames, existingNames) {
+        allBookmarkNames.filter { it !in existingNames }
+    }
+
+    // A cor escolhida aqui vale só para o rótulo NOVO (os já existentes mantêm
+    // a própria cor lembrada). Se o texto digitado bater com um nome já usado
+    // antes, repete a cor daquele nome — a menos que você escolha outra cor
+    // manualmente depois disso.
+    LaunchedEffect(newName) {
+        if (newName.isNotBlank() && newName != lastAutoFilledName) {
+            lastAutoFilledName = newName
+            getColorForName(newName)?.let { rememberedColor -> selectedColor = rememberedColor }
         }
     }
 
@@ -511,55 +529,61 @@ private fun BookmarkDialog(
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Text(
-                        "Você pode adicionar outro marcador (label), ou remover todos os deste capítulo. " +
-                            "Quando há mais de um marcador no mesmo capítulo, a fita usa a cor do tema " +
-                            "em vez de uma cor específica.",
+                        "Você pode adicionar mais rótulos abaixo, ou remover todos os deste capítulo.",
                         style = MaterialTheme.typography.labelMedium,
                         modifier = Modifier.padding(top = 8.dp)
                     )
-                } else {
-                    Text(
-                        "Dar um nome é opcional — ajuda a lembrar por que você salvou esta página.",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
                 }
-                if (allBookmarkNames.isNotEmpty()) {
+
+                // 1) Usar um ou mais rótulos já existentes
+                if (selectableNames.isNotEmpty()) {
                     Text(
-                        "Usar um marcador existente (repete a cor usada nele):",
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(top = 12.dp, bottom = 6.dp)
+                        "1. Usar rótulos já existentes (pode escolher vários)",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = if (isBookmarked) 16.dp else 4.dp, bottom = 6.dp)
                     )
                     androidx.compose.foundation.lazy.LazyRow(
                         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
                     ) {
-                        items(allBookmarkNames) { existing ->
-                            val isChosen = name == existing
-                            androidx.compose.material3.AssistChip(
-                                onClick = { name = if (isChosen) "" else existing },
-                                label = { Text(existing) },
-                                colors = if (isChosen) {
-                                    androidx.compose.material3.AssistChipDefaults.assistChipColors(
-                                        containerColor = MaterialTheme.colorScheme.primary,
-                                        labelColor = MaterialTheme.colorScheme.onPrimary
-                                    )
-                                } else {
-                                    androidx.compose.material3.AssistChipDefaults.assistChipColors()
-                                }
+                        items(selectableNames) { existing ->
+                            val isChosen = existing in selectedExisting
+                            androidx.compose.material3.FilterChip(
+                                selected = isChosen,
+                                onClick = {
+                                    selectedExisting = if (isChosen) {
+                                        selectedExisting - existing
+                                    } else {
+                                        selectedExisting + existing
+                                    }
+                                },
+                                label = { Text(existing) }
                             )
                         }
                     }
                 }
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    placeholder = { Text("Nome (opcional) — ou escolha acima") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
-                )
+
+                // 2) Criar um novo rótulo
                 Text(
-                    "Cor do marcador (opcional)",
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(top = 14.dp, bottom = 6.dp)
+                    "2. Ou criar um novo rótulo",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 16.dp, bottom = 6.dp)
+                )
+                OutlinedTextField(
+                    value = newName,
+                    onValueChange = { newName = it },
+                    placeholder = { Text("Ex.: Estudo bíblico, Oração...") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // 3) Cor do rótulo novo, se quiser
+                Text(
+                    "3. Cor do rótulo novo (se quiser)",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 16.dp, bottom = 6.dp)
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     highlightColors.forEach { (colorName, color) ->
@@ -573,11 +597,18 @@ private fun BookmarkDialog(
                         )
                     }
                 }
+                Text(
+                    "Rótulos já existentes mantêm a própria cor automaticamente. Sem cor " +
+                        "escolhida, ou com rótulos de cores diferentes no mesmo capítulo, a fita " +
+                        "aparece na cor do tema do app.",
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
             }
         },
         confirmButton = {
             TextButton(
-                onClick = { onSave(name.trim(), selectedColor) }
+                onClick = { onSave(newName.trim(), selectedExisting, selectedColor) }
             ) { Text("Salvar marcador") }
         },
         dismissButton = {

@@ -200,7 +200,8 @@ fun AppNavGraph(repository: BibleRepository) {
         composable(Routes.SETTINGS) {
             SettingsScreen(
                 repository = repository,
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onBookmarks = { navController.navigate(Routes.BOOKMARKS) }
             )
         }
         composable(Routes.ABOUT) {
