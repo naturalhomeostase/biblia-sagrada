@@ -1,5 +1,6 @@
 package com.bibliasagrada.app.ui.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -44,7 +45,7 @@ import com.bibliasagrada.app.ui.theme.LocalHighlightColors
  * dá para arrastar (swipe) para o lado para ir ao livro anterior/seguinte —
  * cada "página" do pager é a grade de capítulos de um livro inteiro.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ChaptersScreen(
     repository: BibleRepository,
