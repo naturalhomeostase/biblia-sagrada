@@ -46,7 +46,10 @@ interface NoteDao {
     @Query("SELECT * FROM notes ORDER BY updatedAt DESC")
     fun observeAll(): Flow<List<NoteEntity>>
 
-    @Query("SELECT * FROM notes WHERE bookId=:bookId AND chapter=:chapter AND verse=:verse LIMIT 1")
+    // Encontra uma nota cujo intervalo (verse..verseEnd) contenha o versículo
+    // dado — assim, tocar em qualquer versículo dentro de uma nota de vários
+    // versículos encontra a mesma nota.
+    @Query("SELECT * FROM notes WHERE bookId=:bookId AND chapter=:chapter AND :verse BETWEEN verse AND verseEnd LIMIT 1")
     suspend fun getForVerse(bookId: Int, chapter: Int, verse: Int): NoteEntity?
 
     @Query("SELECT * FROM notes WHERE bookId=:bookId AND chapter=:chapter")

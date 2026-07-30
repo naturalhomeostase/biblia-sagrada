@@ -25,7 +25,8 @@ data class NoteEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val bookId: Int,
     val chapter: Int,
-    val verse: Int,
+    val verse: Int, // primeiro versículo do intervalo
+    val verseEnd: Int = verse, // último versículo do intervalo (igual a "verse" para notas de 1 versículo só)
     val text: String,
     val updatedAt: Long = System.currentTimeMillis()
 )

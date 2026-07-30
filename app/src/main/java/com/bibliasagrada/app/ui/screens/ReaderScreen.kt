@@ -425,6 +425,10 @@ fun ReaderScreen(
         // isso sozinho).
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val singleVerse = verses.singleOrNull()
+        // Intervalo coberto pela seleção atual — para uma nota que abrange
+        // vários versículos, guardamos o primeiro e o último selecionados.
+        val verseStart = remember(verses) { verses.minOf { it.verse } }
+        val verseEnd = remember(verses) { verses.maxOf { it.verse } }
         var isFavorite by remember(verses) { mutableStateOf(false) }
         var highlight by remember(verses) { mutableStateOf<String?>(null) }
         var noteText by remember(verses) { mutableStateOf("") }
@@ -434,9 +438,11 @@ fun ReaderScreen(
             if (singleVerse != null) {
                 isFavorite = repository.isFavorite(singleVerse.bookId, singleVerse.chapter, singleVerse.verse)
                 highlight = repository.getHighlightForVerse(singleVerse.bookId, singleVerse.chapter, singleVerse.verse)
-                existingNote = repository.getNoteForVerse(singleVerse.bookId, singleVerse.chapter, singleVerse.verse)
-                noteText = existingNote?.text ?: ""
             }
+            // A nota é buscada pelo primeiro versículo selecionado — encontra a
+            // mesma nota tanto para 1 versículo quanto para um intervalo.
+            existingNote = repository.getNoteForVerse(verses.first().bookId, verses.first().chapter, verseStart)
+            noteText = existingNote?.text ?: ""
         }
 
         val combinedText = verses.joinToString(" ") { it.text.trim() }
@@ -475,10 +481,8 @@ fun ReaderScreen(
                     }
                 },
                 onSaveNote = { text ->
-                    singleVerse?.let { v ->
-                        scope.launch {
-                            repository.saveNote(existingNote, v.bookId, v.chapter, v.verse, text)
-                        }
+                    scope.launch {
+                        repository.saveNote(existingNote, verses.first().bookId, verses.first().chapter, verseStart, verseEnd, text)
                     }
                 },
                 onClose = { selectedVerses = null }

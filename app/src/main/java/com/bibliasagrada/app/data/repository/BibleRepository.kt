@@ -120,17 +120,22 @@ class BibleRepository(private val appContext: Context) {
     fun observeAllNotes(): Flow<List<NoteEntity>> = userDb.noteDao().observeAll()
     fun observeNotesForChapter(bookId: Int, chapter: Int): Flow<List<NoteEntity>> =
         userDb.noteDao().observeForChapter(bookId, chapter)
+    /** Encontra a nota (de 1 ou vários versículos) que cobre esse versículo, se houver. */
     suspend fun getNoteForVerse(bookId: Int, chapter: Int, verse: Int): NoteEntity? =
         userDb.noteDao().getForVerse(bookId, chapter, verse)
-    suspend fun saveNote(existing: NoteEntity?, bookId: Int, chapter: Int, verse: Int, text: String) {
+    suspend fun saveNote(existing: NoteEntity?, bookId: Int, chapter: Int, verseStart: Int, verseEnd: Int, text: String) {
         if (text.isBlank()) {
             existing?.let { userDb.noteDao().delete(it) }
             return
         }
         if (existing != null) {
-            userDb.noteDao().update(existing.copy(text = text, updatedAt = System.currentTimeMillis()))
+            userDb.noteDao().update(
+                existing.copy(verse = verseStart, verseEnd = verseEnd, text = text, updatedAt = System.currentTimeMillis())
+            )
         } else {
-            userDb.noteDao().insert(NoteEntity(bookId = bookId, chapter = chapter, verse = verse, text = text))
+            userDb.noteDao().insert(
+                NoteEntity(bookId = bookId, chapter = chapter, verse = verseStart, verseEnd = verseEnd, text = text)
+            )
         }
     }
 

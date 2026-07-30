@@ -44,7 +44,13 @@ fun NotesScreen(
     LaunchedEffect(notes) {
         val map = mutableMapOf<Long, String>()
         notes.forEach { note ->
-            repository.getVerse(note.bookId, note.chapter, note.verse)?.let { map[note.id] = it.reference }
+            repository.getVerse(note.bookId, note.chapter, note.verse)?.let { startVerse ->
+                map[note.id] = if (note.verseEnd > note.verse) {
+                    "${startVerse.bookName} ${note.chapter}:${note.verse}-${note.verseEnd}"
+                } else {
+                    startVerse.reference
+                }
+            }
         }
         referenceOf = map
     }

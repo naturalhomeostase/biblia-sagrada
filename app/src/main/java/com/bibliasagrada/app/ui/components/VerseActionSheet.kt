@@ -47,11 +47,11 @@ import com.bibliasagrada.app.ui.theme.LocalHighlightColors
  * Menu de ações para um ou mais versículos selecionados.
  *
  * Quando [verses] tem mais de um item (seleção múltipla), o favoritar fica
- * escondido (não faz sentido para vários versículos de uma vez) e a seção de
- * nota também fica escondida, já que uma nota é sempre ligada a um único
- * versículo específico no banco de dados. As demais ações (copiar,
- * compartilhar, gerar imagem, marcar com cor) funcionam normalmente com
- * todos os versículos selecionados juntos.
+ * escondido (não faz sentido para vários versículos de uma vez). As demais
+ * ações (copiar, compartilhar, gerar imagem, marcar com cor, e também a
+ * nota) funcionam normalmente com todos os versículos selecionados juntos —
+ * a nota fica associada ao intervalo inteiro (do primeiro ao último
+ * versículo selecionado).
  */
 @Composable
 fun VerseActionSheet(
@@ -147,26 +147,29 @@ fun VerseActionSheet(
             }
         }
 
-        if (isSingle) {
-            Spacer(Modifier.height(16.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.EditNote, contentDescription = null)
-                Spacer(Modifier.size(8.dp))
-                Text("Minha nota", style = MaterialTheme.typography.labelLarge)
-            }
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
-                value = noteText,
-                onValueChange = { noteText = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Escreva uma reflexão sobre este versículo...") },
-                minLines = 2
+        Spacer(Modifier.height(16.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.EditNote, contentDescription = null)
+            Spacer(Modifier.size(8.dp))
+            Text(
+                if (isSingle) "Minha nota" else "Minha nota (para estes ${verses.size} versículos)",
+                style = MaterialTheme.typography.labelLarge
             )
-            Spacer(Modifier.height(8.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = { onSaveNote(noteText); onClose() }) {
-                    Text("Salvar nota")
-                }
+        }
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(
+            value = noteText,
+            onValueChange = { noteText = it },
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = {
+                Text(if (isSingle) "Escreva uma reflexão sobre este versículo..." else "Escreva uma reflexão sobre esta passagem...")
+            },
+            minLines = 2
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            TextButton(onClick = { onSaveNote(noteText); onClose() }) {
+                Text("Salvar nota")
             }
         }
     }
