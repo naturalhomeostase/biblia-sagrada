@@ -131,59 +131,60 @@ fun BooksScreen(
                         Icon(Icons.Filled.MoreVert, contentDescription = "Mais opções")
                     }
                     DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                        val menuIconTint = MaterialTheme.colorScheme.primary
                         DropdownMenuItem(
                             text = { Text("Favoritos") },
-                            leadingIcon = { Icon(Icons.Filled.Bookmark, null) },
+                            leadingIcon = { Icon(Icons.Filled.Bookmark, null, tint = menuIconTint) },
                             onClick = { menuExpanded = false; onFavorites() }
                         )
                         DropdownMenuItem(
                             text = { Text("Histórico") },
-                            leadingIcon = { Icon(Icons.Filled.History, null) },
+                            leadingIcon = { Icon(Icons.Filled.History, null, tint = menuIconTint) },
                             onClick = { menuExpanded = false; onHistory() }
                         )
                         DropdownMenuItem(
                             text = { Text("Marcadores") },
-                            leadingIcon = { Icon(Icons.Filled.Bookmarks, null) },
+                            leadingIcon = { Icon(Icons.Filled.Bookmarks, null, tint = menuIconTint) },
                             onClick = { menuExpanded = false; onBookmarks() }
                         )
                         DropdownMenuItem(
                             text = { Text("Minhas notas") },
-                            leadingIcon = { Icon(Icons.Filled.EditNote, null) },
+                            leadingIcon = { Icon(Icons.Filled.EditNote, null, tint = menuIconTint) },
                             onClick = { menuExpanded = false; onNotes() }
                         )
                         DropdownMenuItem(
                             text = { Text("Traduções") },
-                            leadingIcon = { Icon(Icons.Filled.Translate, null) },
+                            leadingIcon = { Icon(Icons.Filled.Translate, null, tint = menuIconTint) },
                             onClick = { menuExpanded = false; onTranslations() }
                         )
                         DropdownMenuItem(
                             text = { Text("Caixinha de Promessas") },
-                            leadingIcon = { Icon(Icons.Filled.AutoAwesome, null) },
+                            leadingIcon = { Icon(Icons.Filled.AutoAwesome, null, tint = menuIconTint) },
                             onClick = { menuExpanded = false; onPromises() }
                         )
                         DropdownMenuItem(
                             text = { Text("Encontre ajuda") },
-                            leadingIcon = { Icon(Icons.Filled.Favorite, null) },
+                            leadingIcon = { Icon(Icons.Filled.Favorite, null, tint = menuIconTint) },
                             onClick = { menuExpanded = false; onHelp() }
                         )
                         DropdownMenuItem(
                             text = { Text("Rever versículo do dia") },
-                            leadingIcon = { Icon(Icons.Filled.AutoAwesome, null) },
+                            leadingIcon = { Icon(Icons.Filled.AutoAwesome, null, tint = menuIconTint) },
                             onClick = { menuExpanded = false; onDailyVerseReview() }
                         )
                         DropdownMenuItem(
                             text = { Text("Backup e restauração") },
-                            leadingIcon = { Icon(Icons.Filled.Backup, null) },
+                            leadingIcon = { Icon(Icons.Filled.Backup, null, tint = menuIconTint) },
                             onClick = { menuExpanded = false; onBackup() }
                         )
                         DropdownMenuItem(
                             text = { Text("Configurações") },
-                            leadingIcon = { Icon(Icons.Filled.Settings, null) },
+                            leadingIcon = { Icon(Icons.Filled.Settings, null, tint = menuIconTint) },
                             onClick = { menuExpanded = false; onSettings() }
                         )
                         DropdownMenuItem(
                             text = { Text("Sobre") },
-                            leadingIcon = { Icon(Icons.Filled.Info, null) },
+                            leadingIcon = { Icon(Icons.Filled.Info, null, tint = menuIconTint) },
                             onClick = { menuExpanded = false; onAbout() }
                         )
                     }
