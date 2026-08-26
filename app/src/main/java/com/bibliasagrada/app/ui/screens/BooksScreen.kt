@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.Card
@@ -77,6 +78,7 @@ fun BooksScreen(
     onHistory: () -> Unit,
     onNotes: () -> Unit,
     onBookmarks: () -> Unit,
+    onTags: () -> Unit,
     onTranslations: () -> Unit,
     onPromises: () -> Unit,
     onBackup: () -> Unit,
@@ -151,6 +153,11 @@ fun BooksScreen(
                             text = { Text("Minhas notas") },
                             leadingIcon = { Icon(Icons.Filled.EditNote, null, tint = menuIconTint) },
                             onClick = { menuExpanded = false; onNotes() }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Tags de estudo") },
+                            leadingIcon = { Icon(Icons.Filled.Sell, null, tint = menuIconTint) },
+                            onClick = { menuExpanded = false; onTags() }
                         )
                         DropdownMenuItem(
                             text = { Text("Traduções") },

@@ -13,7 +13,9 @@ import com.bibliasagrada.app.data.room.HighlightEntity
 import com.bibliasagrada.app.data.room.HistoryEntity
 import com.bibliasagrada.app.data.room.NoteEntity
 import com.bibliasagrada.app.data.room.ReadingProgressEntity
+import com.bibliasagrada.app.data.room.TagEntity
 import com.bibliasagrada.app.data.room.UserDataDatabase
+import com.bibliasagrada.app.data.room.VerseTagEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -180,6 +182,51 @@ class BibleRepository(private val appContext: Context) {
     }
     suspend fun removeBookmarksForChapter(bookId: Int, chapter: Int) {
         userDb.bookmarkDao().deleteForChapter(bookId, chapter)
+    }
+
+    // --- Tags de estudo (marcação temática de versículos, ex.: "Salvação") ---
+    fun observeAllTags(): Flow<List<TagEntity>> = userDb.tagDao().observeAll()
+    /** Tags do versículo, reativo — atualiza sozinho quando uma tag é adicionada/removida dele. */
+    fun observeTagsForVerse(bookId: Int, chapter: Int, verse: Int): Flow<List<TagEntity>> =
+        userDb.verseTagDao().observeTagsForVerse(bookId, chapter, verse)
+    /** bookId/chapter/verse cobertos por cada tag, reativo — para a tela de listagem por tag. */
+    fun observeVersesForTag(tagId: Long): Flow<List<VerseTagEntity>> = userDb.verseTagDao().observeVersesForTag(tagId)
+    suspend fun getVersesForTag(tagId: Long): List<VerseTagEntity> = userDb.verseTagDao().getForTag(tagId)
+    /** tagId -> quantidade de versículos marcados com ela. */
+    fun observeTagCounts(): Flow<Map<Long, Int>> =
+        userDb.verseTagDao().observeCounts().map { counts -> counts.associate { it.tagId to it.count } }
+
+    /** Acha a tag pelo nome (sem diferenciar maiúsculas/minúsculas) ou cria uma nova com a cor dada. */
+    suspend fun getOrCreateTag(name: String, color: String): Long {
+        val trimmed = name.trim()
+        userDb.tagDao().getByName(trimmed)?.let { return it.id }
+        val inserted = userDb.tagDao().insert(TagEntity(name = trimmed, color = color))
+        // Em corrida rara (duas criações "ao mesmo tempo" com o mesmo nome), o insert é
+        // ignorado (OnConflictStrategy.IGNORE) e devolve -1 — nesse caso busca de novo.
+        return if (inserted > 0) inserted else (userDb.tagDao().getByName(trimmed)?.id ?: inserted)
+    }
+
+    /** Aplica uma tag (já existente, por id) a um ou mais versículos de uma vez. */
+    suspend fun addTagToVerses(tagId: Long, verses: List<Verse>) {
+        verses.forEach { v ->
+            userDb.verseTagDao().insert(VerseTagEntity(tagId = tagId, bookId = v.bookId, chapter = v.chapter, verse = v.verse))
+        }
+    }
+
+    /** Remove uma tag de um único versículo (não apaga a tag em si, só essa associação). */
+    suspend fun removeVerseTag(tagId: Long, bookId: Int, chapter: Int, verse: Int) {
+        userDb.verseTagDao().delete(tagId, bookId, chapter, verse)
+    }
+
+    /** Renomeia e/ou muda a cor de uma tag — vale para todos os versículos já marcados com ela. */
+    suspend fun updateTag(tag: TagEntity, newName: String, newColor: String) {
+        userDb.tagDao().update(tag.copy(name = newName.trim(), color = newColor))
+    }
+
+    /** Apaga a tag inteira e todas as marcações de versículos associadas a ela. */
+    suspend fun deleteTag(tagId: Long) {
+        userDb.verseTagDao().deleteAllForTag(tagId)
+        userDb.tagDao().deleteById(tagId)
     }
 
     // --- Versículo do dia ---

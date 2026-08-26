@@ -13,6 +13,7 @@ object Routes {
     const val SETTINGS = "settings"
     const val ABOUT = "about"
     const val BOOKMARKS = "bookmarks"
+    const val TAGS = "tags"
     const val TRANSLATIONS = "translations"
     const val PROMISES = "promises"
     const val BACKUP = "backup"

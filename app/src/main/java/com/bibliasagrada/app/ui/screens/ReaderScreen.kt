@@ -93,6 +93,7 @@ import com.bibliasagrada.app.data.repository.BibleRepository
 import com.bibliasagrada.app.data.repository.ColorPalette
 import com.bibliasagrada.app.data.repository.ThemeMode
 import com.bibliasagrada.app.data.room.NoteEntity
+import com.bibliasagrada.app.data.room.TagEntity
 import com.bibliasagrada.app.ui.components.VerseActionSheet
 import com.bibliasagrada.app.ui.theme.LocalColorPalette
 import com.bibliasagrada.app.ui.theme.LocalHighlightColors
@@ -433,6 +434,16 @@ fun ReaderScreen(
         var highlight by remember(verses) { mutableStateOf<String?>(null) }
         var noteText by remember(verses) { mutableStateOf("") }
         var existingNote by remember(verses) { mutableStateOf<NoteEntity?>(null) }
+        var showTagDialog by remember(verses) { mutableStateOf(false) }
+        // Tags mostradas na caixa: só quando é 1 versículo só (para vários
+        // versículos, cada um pode ter um conjunto diferente de tags já
+        // aplicadas, então a lista fica vazia — mas "Adicionar tag" continua
+        // aplicando a tag escolhida/criada a todos os selecionados de uma vez).
+        val tagsFlow = remember(verses) {
+            singleVerse?.let { v -> repository.observeTagsForVerse(v.bookId, v.chapter, v.verse) }
+                ?: kotlinx.coroutines.flow.flowOf(emptyList())
+        }
+        val currentTags by tagsFlow.collectAsState(initial = emptyList())
 
         LaunchedEffect(verses) {
             if (singleVerse != null) {
@@ -454,6 +465,7 @@ fun ReaderScreen(
                 isFavorite = isFavorite,
                 currentHighlight = highlight,
                 currentNote = noteText,
+                currentTags = currentTags,
                 onCopy = {
                     clipboard.setText(AnnotatedString("$combinedText ($combinedReference)"))
                 },
@@ -480,12 +492,38 @@ fun ReaderScreen(
                         verses.forEach { v -> repository.setHighlight(v.bookId, v.chapter, v.verse, color) }
                     }
                 },
+                onRemoveTag = { tag ->
+                    singleVerse?.let { v ->
+                        scope.launch { repository.removeVerseTag(tag.id, v.bookId, v.chapter, v.verse) }
+                    }
+                },
+                onAddTagClick = { showTagDialog = true },
                 onSaveNote = { text ->
                     scope.launch {
                         repository.saveNote(existingNote, verses.first().bookId, verses.first().chapter, verseStart, verseEnd, text)
                     }
                 },
                 onClose = { selectedVerses = null }
+            )
+        }
+
+        if (showTagDialog) {
+            val allTags by repository.observeAllTags().collectAsState(initial = emptyList())
+            val alreadyAppliedNames = remember(currentTags) { currentTags.map { it.name } }
+            TagDialog(
+                allTags = allTags,
+                alreadyAppliedNames = alreadyAppliedNames,
+                onDismiss = { showTagDialog = false },
+                onSave = { newName, selectedExistingIds, newColor ->
+                    scope.launch {
+                        selectedExistingIds.forEach { tagId -> repository.addTagToVerses(tagId, verses) }
+                        if (newName.isNotBlank()) {
+                            val tagId = repository.getOrCreateTag(newName, newColor)
+                            repository.addTagToVerses(tagId, verses)
+                        }
+                    }
+                    showTagDialog = false
+                }
             )
         }
     }
@@ -625,6 +663,124 @@ private fun BookmarkDialog(
             } else {
                 TextButton(onClick = onDismiss) { Text("Cancelar") }
             }
+        }
+    )
+}
+
+/** Diálogo para aplicar tags de estudo (ex.: "Salvação", "Fé") ao(s)
+ *  versículo(s) selecionado(s): pode escolher várias tags já existentes de
+ *  uma vez, e/ou criar uma tag nova com uma cor à sua escolha (mesma paleta
+ *  usada nos marcadores e destaques). */
+@Composable
+private fun TagDialog(
+    allTags: List<TagEntity>,
+    alreadyAppliedNames: List<String>,
+    onDismiss: () -> Unit,
+    onSave: (newName: String, selectedExistingIds: Set<Long>, newColor: String) -> Unit
+) {
+    var newName by remember { mutableStateOf("") }
+    var selectedExisting by remember { mutableStateOf(setOf<Long>()) }
+    var selectedColor by remember { mutableStateOf<String?>(null) }
+    val highlightColors = LocalHighlightColors.current
+    val defaultColor = remember(highlightColors) { highlightColors.keys.first() }
+
+    // Selecionáveis: tags já existentes, exceto as que já estão neste versículo.
+    val selectableTags = remember(allTags, alreadyAppliedNames) {
+        allTags.filter { it.name !in alreadyAppliedNames }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Tags de estudo") },
+        text = {
+            Column {
+                // 1) Usar uma ou mais tags já existentes
+                if (selectableTags.isNotEmpty()) {
+                    Text(
+                        "1. Usar tags já existentes (pode escolher várias)",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+                    androidx.compose.foundation.lazy.LazyRow(
+                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(selectableTags) { tag ->
+                            val isChosen = tag.id in selectedExisting
+                            androidx.compose.material3.FilterChip(
+                                selected = isChosen,
+                                onClick = {
+                                    selectedExisting = if (isChosen) {
+                                        selectedExisting - tag.id
+                                    } else {
+                                        selectedExisting + tag.id
+                                    }
+                                },
+                                leadingIcon = {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(10.dp)
+                                            .background(
+                                                highlightColors[tag.color] ?: MaterialTheme.colorScheme.primary,
+                                                androidx.compose.foundation.shape.CircleShape
+                                            )
+                                    )
+                                },
+                                label = { Text(tag.name) }
+                            )
+                        }
+                    }
+                }
+
+                // 2) Criar uma tag nova
+                Text(
+                    "2. Ou criar uma tag nova",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = if (selectableTags.isNotEmpty()) 16.dp else 4.dp, bottom = 6.dp)
+                )
+                OutlinedTextField(
+                    value = newName,
+                    onValueChange = { newName = it },
+                    placeholder = { Text("Ex.: Salvação, Fé, Oração...") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // 3) Cor da tag nova
+                Text(
+                    "3. Cor da tag nova",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 16.dp, bottom = 6.dp)
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    highlightColors.forEach { (colorName, color) ->
+                        val isSelected = (selectedColor ?: defaultColor) == colorName
+                        Box(
+                            modifier = Modifier
+                                .padding(end = 10.dp)
+                                .size(if (isSelected) 32.dp else 26.dp)
+                                .background(color, androidx.compose.foundation.shape.CircleShape)
+                                .clickable { selectedColor = colorName }
+                        )
+                    }
+                }
+                Text(
+                    "Cada tag guarda sua própria cor, para reconhecer o tema de relance " +
+                        "ao rolar a página. Tags já existentes mantêm a cor que já têm.",
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onSave(newName.trim(), selectedExisting, selectedColor ?: defaultColor) }
+            ) { Text("Salvar") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancelar") }
         }
     )
 }

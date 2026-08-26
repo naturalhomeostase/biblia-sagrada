@@ -2,7 +2,9 @@ package com.bibliasagrada.app.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,6 +18,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Close
@@ -24,10 +27,15 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.FormatColorReset
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.InputChip
+import androidx.compose.material3.InputChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -41,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.bibliasagrada.app.data.model.Verse
+import com.bibliasagrada.app.data.room.TagEntity
 import com.bibliasagrada.app.ui.theme.LocalHighlightColors
 
 /**
@@ -59,12 +68,15 @@ fun VerseActionSheet(
     isFavorite: Boolean,
     currentHighlight: String?,
     currentNote: String,
+    currentTags: List<TagEntity>,
     onCopy: () -> Unit,
     onShare: () -> Unit,
     onShareImage: () -> Unit,
     onSaveImage: () -> Unit,
     onToggleFavorite: () -> Unit,
     onSetHighlight: (String?) -> Unit,
+    onRemoveTag: (TagEntity) -> Unit,
+    onAddTagClick: () -> Unit,
     onSaveNote: (String) -> Unit,
     onClose: () -> Unit
 ) {
@@ -145,6 +157,59 @@ fun VerseActionSheet(
                         .clickable { onSetHighlight(if (selected) null else name) }
                 ) {}
             }
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Sell, contentDescription = null)
+            Spacer(Modifier.size(8.dp))
+            Text(
+                if (isSingle) "Tags de estudo" else "Tags de estudo (para estes ${verses.size} versículos)",
+                style = MaterialTheme.typography.labelLarge
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            currentTags.forEach { tag ->
+                val tagColor = highlightColors[tag.color] ?: MaterialTheme.colorScheme.secondaryContainer
+                InputChip(
+                    selected = false,
+                    onClick = {},
+                    label = { Text(tag.name) },
+                    leadingIcon = {
+                        Box(
+                            modifier = Modifier
+                                .padding(start = 2.dp)
+                                .size(10.dp)
+                                .background(tagColor, CircleShape)
+                        )
+                    },
+                    trailingIcon = {
+                        Icon(
+                            Icons.Filled.Close,
+                            contentDescription = "Remover tag \"${tag.name}\"",
+                            modifier = Modifier
+                                .size(16.dp)
+                                .clickable { onRemoveTag(tag) }
+                        )
+                    },
+                    colors = InputChipDefaults.inputChipColors(),
+                    modifier = Modifier.padding(end = 8.dp)
+                )
+            }
+            AssistChip(
+                onClick = onAddTagClick,
+                label = { Text(if (currentTags.isEmpty()) "Adicionar tag" else "Tag") },
+                leadingIcon = {
+                    Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                },
+                colors = AssistChipDefaults.assistChipColors()
+            )
         }
 
         Spacer(Modifier.height(16.dp))

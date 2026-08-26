@@ -56,3 +56,28 @@ data class ReadingProgressEntity(
     val chapter: Int,
     val verse: Int
 )
+
+/**
+ * Tag de estudo (ex.: "Salvação", "Fé", "Oração"), com nome único e cor
+ * própria (mesma paleta usada nos destaques e marcadores). Os versículos
+ * marcados com essa tag ficam na tabela [VerseTagEntity], numa relação
+ * muitos-para-muitos: um versículo pode ter várias tags, e uma tag pode
+ * estar em vários versículos.
+ */
+@Entity(tableName = "tags")
+data class TagEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val color: String, // nome da cor: amarelo, azul, verde, vermelho, roxo
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+/** Associação entre uma tag e um versículo marcado com ela. */
+@Entity(tableName = "verse_tags", primaryKeys = ["tagId", "bookId", "chapter", "verse"])
+data class VerseTagEntity(
+    val tagId: Long,
+    val bookId: Int,
+    val chapter: Int,
+    val verse: Int,
+    val addedAt: Long = System.currentTimeMillis()
+)

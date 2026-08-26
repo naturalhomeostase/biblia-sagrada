@@ -115,3 +115,55 @@ interface BookmarkDao {
     @Query("DELETE FROM bookmarks WHERE bookId=:bookId AND chapter=:chapter")
     suspend fun deleteForChapter(bookId: Int, chapter: Int)
 }
+
+/** Quantidade de versículos marcados com cada tag — usado para mostrar a contagem nas listas sem carregar tudo. */
+data class TagCount(val tagId: Long, val count: Int)
+
+@Dao
+interface TagDao {
+    @Query("SELECT * FROM tags ORDER BY name COLLATE NOCASE ASC")
+    fun observeAll(): Flow<List<TagEntity>>
+
+    @Query("SELECT * FROM tags WHERE name = :name COLLATE NOCASE LIMIT 1")
+    suspend fun getByName(name: String): TagEntity?
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insert(entity: TagEntity): Long
+
+    @Update
+    suspend fun update(entity: TagEntity)
+
+    @Query("DELETE FROM tags WHERE id = :id")
+    suspend fun deleteById(id: Long)
+}
+
+@Dao
+interface VerseTagDao {
+    @Query(
+        """
+        SELECT tags.* FROM tags
+        INNER JOIN verse_tags ON verse_tags.tagId = tags.id
+        WHERE verse_tags.bookId = :bookId AND verse_tags.chapter = :chapter AND verse_tags.verse = :verse
+        ORDER BY tags.name COLLATE NOCASE ASC
+        """
+    )
+    fun observeTagsForVerse(bookId: Int, chapter: Int, verse: Int): Flow<List<TagEntity>>
+
+    @Query("SELECT * FROM verse_tags WHERE tagId = :tagId ORDER BY bookId ASC, chapter ASC, verse ASC")
+    fun observeVersesForTag(tagId: Long): Flow<List<VerseTagEntity>>
+
+    @Query("SELECT * FROM verse_tags WHERE tagId = :tagId ORDER BY bookId ASC, chapter ASC, verse ASC")
+    suspend fun getForTag(tagId: Long): List<VerseTagEntity>
+
+    @Query("SELECT tagId, COUNT(*) as count FROM verse_tags GROUP BY tagId")
+    fun observeCounts(): Flow<List<TagCount>>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insert(entity: VerseTagEntity)
+
+    @Query("DELETE FROM verse_tags WHERE tagId = :tagId AND bookId = :bookId AND chapter = :chapter AND verse = :verse")
+    suspend fun delete(tagId: Long, bookId: Int, chapter: Int, verse: Int)
+
+    @Query("DELETE FROM verse_tags WHERE tagId = :tagId")
+    suspend fun deleteAllForTag(tagId: Long)
+}

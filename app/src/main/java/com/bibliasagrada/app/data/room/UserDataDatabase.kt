@@ -12,9 +12,11 @@ import androidx.room.RoomDatabase
         NoteEntity::class,
         HistoryEntity::class,
         ReadingProgressEntity::class,
-        BookmarkEntity::class
+        BookmarkEntity::class,
+        TagEntity::class,
+        VerseTagEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class UserDataDatabase : RoomDatabase() {
@@ -24,6 +26,8 @@ abstract class UserDataDatabase : RoomDatabase() {
     abstract fun historyDao(): HistoryDao
     abstract fun readingProgressDao(): ReadingProgressDao
     abstract fun bookmarkDao(): BookmarkDao
+    abstract fun tagDao(): TagDao
+    abstract fun verseTagDao(): VerseTagDao
 
     companion object {
         @Volatile private var instance: UserDataDatabase? = null
