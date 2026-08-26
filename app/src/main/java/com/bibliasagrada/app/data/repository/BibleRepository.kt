@@ -218,9 +218,23 @@ class BibleRepository(private val appContext: Context) {
         userDb.verseTagDao().delete(tagId, bookId, chapter, verse)
     }
 
-    /** Renomeia e/ou muda a cor de uma tag — vale para todos os versículos já marcados com ela. */
+    /** Renomeia e/ou muda a cor de uma tag. Se o novo nome já pertencer a outra
+     *  tag existente, em vez de criar um nome duplicado confuso, mescla os
+     *  versículos desta tag na tag já existente (e apaga esta). */
     suspend fun updateTag(tag: TagEntity, newName: String, newColor: String) {
-        userDb.tagDao().update(tag.copy(name = newName.trim(), color = newColor))
+        val trimmed = newName.trim()
+        val existingWithSameName = userDb.tagDao().getByName(trimmed)
+        if (existingWithSameName != null && existingWithSameName.id != tag.id) {
+            val versesToMove = userDb.verseTagDao().getForTag(tag.id)
+            versesToMove.forEach { ref ->
+                userDb.verseTagDao().insert(ref.copy(tagId = existingWithSameName.id))
+            }
+            userDb.verseTagDao().deleteAllForTag(tag.id)
+            userDb.tagDao().deleteById(tag.id)
+            userDb.tagDao().update(existingWithSameName.copy(color = newColor))
+        } else {
+            userDb.tagDao().update(tag.copy(name = trimmed, color = newColor))
+        }
     }
 
     /** Apaga a tag inteira e todas as marcações de versículos associadas a ela. */

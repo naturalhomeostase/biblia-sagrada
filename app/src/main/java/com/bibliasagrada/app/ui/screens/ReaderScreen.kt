@@ -776,6 +776,7 @@ private fun TagDialog(
         },
         confirmButton = {
             TextButton(
+                enabled = newName.isNotBlank() || selectedExisting.isNotEmpty(),
                 onClick = { onSave(newName.trim(), selectedExisting, selectedColor ?: defaultColor) }
             ) { Text("Salvar") }
         },

@@ -78,14 +78,16 @@ fun TagsScreen(
     var tagToDelete by remember { mutableStateOf<TagEntity?>(null) }
     var tagToEdit by remember { mutableStateOf<TagEntity?>(null) }
 
-    LaunchedEffect(expandedTagId) {
-        val id = expandedTagId
-        if (id == null) {
-            versesForExpanded = emptyList()
-            return@LaunchedEffect
-        }
-        val refs = repository.getVersesForTag(id)
-        versesForExpanded = refs.mapNotNull { repository.getVerse(it.bookId, it.chapter, it.verse) }
+    // Referências (bookId/chapter/verse) da tag expandida, reativo: ao remover
+    // a tag de um versículo pela lista abaixo, essa flow do Room emite de novo
+    // sozinha e o efeito abaixo busca os versículos atualizados.
+    val expandedRefsFlow = remember(expandedTagId) {
+        expandedTagId?.let { repository.observeVersesForTag(it) } ?: kotlinx.coroutines.flow.flowOf(emptyList())
+    }
+    val expandedRefs by expandedRefsFlow.collectAsState(initial = emptyList())
+
+    LaunchedEffect(expandedRefs) {
+        versesForExpanded = expandedRefs.mapNotNull { repository.getVerse(it.bookId, it.chapter, it.verse) }
     }
 
     Scaffold(
