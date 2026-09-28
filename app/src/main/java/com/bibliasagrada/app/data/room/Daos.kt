@@ -155,6 +155,18 @@ interface VerseTagDao {
     @Query("SELECT * FROM verse_tags WHERE tagId = :tagId ORDER BY bookId ASC, chapter ASC, verse ASC")
     suspend fun getForTag(tagId: Long): List<VerseTagEntity>
 
+    /** Cor de cada tag aplicada, por versículo, num capítulo inteiro — usado para desenhar
+     *  o símbolo de tag (colorido) ao final de cada versículo marcado, na leitura. */
+    @Query(
+        """
+        SELECT verse_tags.verse as verse, tags.color as color FROM verse_tags
+        INNER JOIN tags ON tags.id = verse_tags.tagId
+        WHERE verse_tags.bookId = :bookId AND verse_tags.chapter = :chapter
+        ORDER BY verse_tags.verse ASC, tags.name COLLATE NOCASE ASC
+        """
+    )
+    fun observeColorsForChapter(bookId: Int, chapter: Int): Flow<List<VerseTagColorRow>>
+
     @Query("SELECT tagId, COUNT(*) as count FROM verse_tags GROUP BY tagId")
     fun observeCounts(): Flow<List<TagCount>>
 
@@ -166,4 +178,28 @@ interface VerseTagDao {
 
     @Query("DELETE FROM verse_tags WHERE tagId = :tagId")
     suspend fun deleteAllForTag(tagId: Long)
+}
+
+/** Linha crua devolvida por [VerseTagDao.observeColorsForChapter]. */
+data class VerseTagColorRow(val verse: Int, val color: String)
+
+@Dao
+interface PartialHighlightDao {
+    @Query("SELECT * FROM partial_highlights WHERE bookId = :bookId AND chapter = :chapter")
+    fun observeForChapter(bookId: Int, chapter: Int): Flow<List<PartialHighlightEntity>>
+
+    @Query("SELECT * FROM partial_highlights WHERE bookId = :bookId AND chapter = :chapter AND verse = :verse")
+    suspend fun getForVerse(bookId: Int, chapter: Int, verse: Int): List<PartialHighlightEntity>
+
+    @Insert
+    suspend fun insert(entity: PartialHighlightEntity): Long
+
+    @Update
+    suspend fun update(entity: PartialHighlightEntity)
+
+    @Query("DELETE FROM partial_highlights WHERE id = :id")
+    suspend fun deleteById(id: Long)
+
+    @Query("DELETE FROM partial_highlights WHERE bookId = :bookId AND chapter = :chapter AND verse = :verse")
+    suspend fun deleteAllForVerse(bookId: Int, chapter: Int, verse: Int)
 }

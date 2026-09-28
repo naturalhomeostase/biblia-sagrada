@@ -42,6 +42,24 @@ val MIGRATION_6_7 = object : Migration(6, 7) {
     }
 }
 
+val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `partial_highlights` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                `bookId` INTEGER NOT NULL,
+                `chapter` INTEGER NOT NULL,
+                `verse` INTEGER NOT NULL,
+                `startOffset` INTEGER NOT NULL,
+                `endOffset` INTEGER NOT NULL,
+                `color` TEXT NOT NULL
+            )
+            """.trimIndent()
+        )
+    }
+}
+
 @Database(
     entities = [
         FavoriteEntity::class,
@@ -51,9 +69,10 @@ val MIGRATION_6_7 = object : Migration(6, 7) {
         ReadingProgressEntity::class,
         BookmarkEntity::class,
         TagEntity::class,
-        VerseTagEntity::class
+        VerseTagEntity::class,
+        PartialHighlightEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class UserDataDatabase : RoomDatabase() {
@@ -65,6 +84,7 @@ abstract class UserDataDatabase : RoomDatabase() {
     abstract fun bookmarkDao(): BookmarkDao
     abstract fun tagDao(): TagDao
     abstract fun verseTagDao(): VerseTagDao
+    abstract fun partialHighlightDao(): PartialHighlightDao
 
     companion object {
         @Volatile private var instance: UserDataDatabase? = null
@@ -75,9 +95,9 @@ abstract class UserDataDatabase : RoomDatabase() {
                     UserDataDatabase::class.java,
                     "user_data.db"
                 )
-                    .addMigrations(MIGRATION_6_7)
+                    .addMigrations(MIGRATION_6_7, MIGRATION_7_8)
                     // Rede de segurança só para saltos de versão sem migração definida
-                    // (não deveria acontecer em uso normal, já que 6→7 tem migração acima).
+                    // (não deveria acontecer em uso normal, já que 6→7 e 7→8 têm migração acima).
                     .fallbackToDestructiveMigration()
                     .build().also { instance = it }
             }

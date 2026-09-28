@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -136,7 +137,7 @@ fun BooksScreen(
                         val menuIconTint = MaterialTheme.colorScheme.primary
                         DropdownMenuItem(
                             text = { Text("Favoritos") },
-                            leadingIcon = { Icon(Icons.Filled.Bookmark, null, tint = menuIconTint) },
+                            leadingIcon = { Icon(Icons.Filled.Star, null, tint = menuIconTint) },
                             onClick = { menuExpanded = false; onFavorites() }
                         )
                         DropdownMenuItem(

@@ -19,23 +19,24 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.Colorize
 import androidx.compose.material.icons.filled.FormatColorReset
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.InputChip
-import androidx.compose.material3.InputChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -69,14 +70,16 @@ fun VerseActionSheet(
     currentHighlight: String?,
     currentNote: String,
     currentTags: List<TagEntity>,
+    allTags: List<TagEntity>,
     onCopy: () -> Unit,
     onShare: () -> Unit,
     onShareImage: () -> Unit,
     onSaveImage: () -> Unit,
     onToggleFavorite: () -> Unit,
     onSetHighlight: (String?) -> Unit,
-    onRemoveTag: (TagEntity) -> Unit,
-    onAddTagClick: () -> Unit,
+    onPartialHighlightClick: () -> Unit,
+    onToggleTag: (TagEntity) -> Unit,
+    onCreateTagClick: () -> Unit,
     onSaveNote: (String) -> Unit,
     onClose: () -> Unit
 ) {
@@ -126,7 +129,7 @@ fun VerseActionSheet(
             ActionIcon(Icons.Filled.Download, "Salvar", onClick = onSaveImage)
             if (isSingle) {
                 ActionIcon(
-                    if (isFavorite) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder,
+                    if (isFavorite) Icons.Filled.Star else Icons.Filled.StarBorder,
                     "Favorito",
                     onClick = onToggleFavorite
                 )
@@ -158,6 +161,13 @@ fun VerseActionSheet(
                 ) {}
             }
         }
+        if (isSingle) {
+            Spacer(Modifier.height(4.dp))
+            TextButton(onClick = onPartialHighlightClick, modifier = Modifier.padding(start = 0.dp)) {
+                Icon(Icons.Filled.Colorize, contentDescription = null, modifier = Modifier.size(18.dp))
+                Text("Realçar só um trecho...", modifier = Modifier.padding(start = 6.dp))
+            }
+        }
 
         Spacer(Modifier.height(16.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -175,11 +185,13 @@ fun VerseActionSheet(
                 .horizontalScroll(rememberScrollState()),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            currentTags.forEach { tag ->
+            val currentTagIds = remember(currentTags) { currentTags.map { it.id }.toSet() }
+            allTags.forEach { tag ->
+                val isChosen = tag.id in currentTagIds
                 val tagColor = highlightColors[tag.color] ?: MaterialTheme.colorScheme.secondaryContainer
-                InputChip(
-                    selected = false,
-                    onClick = {},
+                FilterChip(
+                    selected = isChosen,
+                    onClick = { onToggleTag(tag) },
                     label = { Text(tag.name) },
                     leadingIcon = {
                         Box(
@@ -189,22 +201,13 @@ fun VerseActionSheet(
                                 .background(tagColor, CircleShape)
                         )
                     },
-                    trailingIcon = {
-                        Icon(
-                            Icons.Filled.Close,
-                            contentDescription = "Remover tag \"${tag.name}\"",
-                            modifier = Modifier
-                                .size(16.dp)
-                                .clickable { onRemoveTag(tag) }
-                        )
-                    },
-                    colors = InputChipDefaults.inputChipColors(),
+                    colors = FilterChipDefaults.filterChipColors(),
                     modifier = Modifier.padding(end = 8.dp)
                 )
             }
             AssistChip(
-                onClick = onAddTagClick,
-                label = { Text(if (currentTags.isEmpty()) "Adicionar tag" else "Tag") },
+                onClick = onCreateTagClick,
+                label = { Text("Nova tag") },
                 leadingIcon = {
                     Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                 },

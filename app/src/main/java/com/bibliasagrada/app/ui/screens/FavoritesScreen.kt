@@ -10,7 +10,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -63,7 +63,7 @@ fun FavoritesScreen(
     ) { padding ->
         if (verses.isEmpty()) {
             EmptyState(
-                icon = Icons.Filled.BookmarkBorder,
+                icon = Icons.Filled.StarBorder,
                 message = "Você ainda não tem versículos favoritos.\nToque em um versículo durante a leitura para salvá-lo aqui.",
                 modifier = Modifier.padding(padding)
             )

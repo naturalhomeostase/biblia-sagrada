@@ -81,3 +81,21 @@ data class VerseTagEntity(
     val verse: Int,
     val addedAt: Long = System.currentTimeMillis()
 )
+
+/**
+ * Realce em apenas um TRECHO do texto de um versículo (ex.: só uma frase),
+ * diferente de [HighlightEntity] que colore o versículo inteiro. startOffset
+ * e endOffset são índices de caractere dentro de [com.bibliasagrada.app.data.model.Verse.text]
+ * (endOffset exclusivo). Um versículo pode ter vários trechos realçados, com
+ * cores diferentes, desde que não se sobreponham entre si.
+ */
+@Entity(tableName = "partial_highlights")
+data class PartialHighlightEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val bookId: Int,
+    val chapter: Int,
+    val verse: Int,
+    val startOffset: Int,
+    val endOffset: Int,
+    val color: String
+)

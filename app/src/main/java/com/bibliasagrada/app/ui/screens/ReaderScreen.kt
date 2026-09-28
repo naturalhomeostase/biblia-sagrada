@@ -42,7 +42,9 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.FormatColorReset
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Sell
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -79,12 +81,19 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.dp
 import com.bibliasagrada.app.R
 import com.bibliasagrada.app.data.model.ChapterRef
@@ -93,7 +102,6 @@ import com.bibliasagrada.app.data.repository.BibleRepository
 import com.bibliasagrada.app.data.repository.ColorPalette
 import com.bibliasagrada.app.data.repository.ThemeMode
 import com.bibliasagrada.app.data.room.NoteEntity
-import com.bibliasagrada.app.data.room.TagEntity
 import com.bibliasagrada.app.ui.components.VerseActionSheet
 import com.bibliasagrada.app.ui.theme.LocalColorPalette
 import com.bibliasagrada.app.ui.theme.LocalHighlightColors
@@ -435,15 +443,17 @@ fun ReaderScreen(
         var noteText by remember(verses) { mutableStateOf("") }
         var existingNote by remember(verses) { mutableStateOf<NoteEntity?>(null) }
         var showTagDialog by remember(verses) { mutableStateOf(false) }
-        // Tags mostradas na caixa: só quando é 1 versículo só (para vários
-        // versículos, cada um pode ter um conjunto diferente de tags já
-        // aplicadas, então a lista fica vazia — mas "Adicionar tag" continua
-        // aplicando a tag escolhida/criada a todos os selecionados de uma vez).
+        var showPartialHighlightDialog by remember(verses) { mutableStateOf(false) }
+        // Tags mostradas como "aplicadas" na caixa: só quando é 1 versículo só
+        // (para vários versículos, cada um pode ter um conjunto diferente de
+        // tags já aplicadas). Já a lista de tags PARA ESCOLHER é sempre todas
+        // as já criadas, pra ficar fácil reaproveitar uma existente.
         val tagsFlow = remember(verses) {
             singleVerse?.let { v -> repository.observeTagsForVerse(v.bookId, v.chapter, v.verse) }
                 ?: kotlinx.coroutines.flow.flowOf(emptyList())
         }
         val currentTags by tagsFlow.collectAsState(initial = emptyList())
+        val allTags by repository.observeAllTags().collectAsState(initial = emptyList())
 
         LaunchedEffect(verses) {
             if (singleVerse != null) {
@@ -466,6 +476,7 @@ fun ReaderScreen(
                 currentHighlight = highlight,
                 currentNote = noteText,
                 currentTags = currentTags,
+                allTags = allTags,
                 onCopy = {
                     clipboard.setText(AnnotatedString("$combinedText ($combinedReference)"))
                 },
@@ -492,12 +503,18 @@ fun ReaderScreen(
                         verses.forEach { v -> repository.setHighlight(v.bookId, v.chapter, v.verse, color) }
                     }
                 },
-                onRemoveTag = { tag ->
-                    singleVerse?.let { v ->
-                        scope.launch { repository.removeVerseTag(tag.id, v.bookId, v.chapter, v.verse) }
+                onPartialHighlightClick = { showPartialHighlightDialog = true },
+                onToggleTag = { tag ->
+                    val isCurrentlyApplied = currentTags.any { it.id == tag.id }
+                    scope.launch {
+                        if (isCurrentlyApplied) {
+                            singleVerse?.let { v -> repository.removeVerseTag(tag.id, v.bookId, v.chapter, v.verse) }
+                        } else {
+                            repository.addTagToVerses(tag.id, verses)
+                        }
                     }
                 },
-                onAddTagClick = { showTagDialog = true },
+                onCreateTagClick = { showTagDialog = true },
                 onSaveNote = { text ->
                     scope.launch {
                         repository.saveNote(existingNote, verses.first().bookId, verses.first().chapter, verseStart, verseEnd, text)
@@ -508,25 +525,175 @@ fun ReaderScreen(
         }
 
         if (showTagDialog) {
-            val allTags by repository.observeAllTags().collectAsState(initial = emptyList())
-            val alreadyAppliedNames = remember(currentTags) { currentTags.map { it.name } }
-            TagDialog(
-                allTags = allTags,
-                alreadyAppliedNames = alreadyAppliedNames,
+            NewTagDialog(
                 onDismiss = { showTagDialog = false },
-                onSave = { newName, selectedExistingIds, newColor ->
+                onSave = { newName, newColor ->
                     scope.launch {
-                        selectedExistingIds.forEach { tagId -> repository.addTagToVerses(tagId, verses) }
-                        if (newName.isNotBlank()) {
-                            val tagId = repository.getOrCreateTag(newName, newColor)
-                            repository.addTagToVerses(tagId, verses)
-                        }
+                        val tagId = repository.getOrCreateTag(newName, newColor)
+                        repository.addTagToVerses(tagId, verses)
                     }
                     showTagDialog = false
                 }
             )
         }
+
+        if (showPartialHighlightDialog && singleVerse != null) {
+            PartialHighlightDialog(
+                verseReference = singleVerse.reference,
+                verseText = singleVerse.text,
+                onDismiss = { showPartialHighlightDialog = false },
+                onApply = { start, end, color ->
+                    scope.launch {
+                        repository.setPartialHighlight(singleVerse.bookId, singleVerse.chapter, singleVerse.verse, start, end, color)
+                    }
+                    showPartialHighlightDialog = false
+                },
+                onRemove = { start, end ->
+                    scope.launch {
+                        repository.removePartialHighlightsInRange(singleVerse.bookId, singleVerse.chapter, singleVerse.verse, start, end)
+                    }
+                    showPartialHighlightDialog = false
+                }
+            )
+        }
     }
+}
+
+/** Diálogo simples para criar uma tag nova (nome + cor) e já aplicá-la
+ *  ao(s) versículo(s) selecionado(s). Tags já existentes são escolhidas
+ *  direto pelos "chips" na própria caixa de ações do versículo — este
+ *  diálogo é só para quando nenhuma delas serve. */
+@Composable
+private fun NewTagDialog(
+    onDismiss: () -> Unit,
+    onSave: (name: String, color: String) -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    var selectedColor by remember { mutableStateOf<String?>(null) }
+    val highlightColors = LocalHighlightColors.current
+    val defaultColor = remember(highlightColors) { highlightColors.keys.first() }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Nova tag de estudo") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    placeholder = { Text("Ex.: Salvação, Fé, Oração...") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    "Cor da tag",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 16.dp, bottom = 6.dp)
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    highlightColors.forEach { (colorName, color) ->
+                        val isSelected = (selectedColor ?: defaultColor) == colorName
+                        Box(
+                            modifier = Modifier
+                                .padding(end = 10.dp)
+                                .size(if (isSelected) 32.dp else 26.dp)
+                                .background(color, androidx.compose.foundation.shape.CircleShape)
+                                .clickable { selectedColor = colorName }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = name.isNotBlank(),
+                onClick = { onSave(name.trim(), selectedColor ?: defaultColor) }
+            ) { Text("Criar e aplicar") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancelar") }
+        }
+    )
+}
+
+/** Diálogo para realçar só um TRECHO do versículo (ex.: uma frase),
+ *  em vez do versículo inteiro. Aproveita a seleção de texto nativa do
+ *  Android: o campo é somente leitura (não dá pra editar o texto), mas
+ *  continua totalmente selecionável por toque-e-arraste, igual a
+ *  selecionar texto em qualquer lugar do sistema. */
+@Composable
+private fun PartialHighlightDialog(
+    verseReference: String,
+    verseText: String,
+    onDismiss: () -> Unit,
+    onApply: (start: Int, end: Int, color: String) -> Unit,
+    onRemove: (start: Int, end: Int) -> Unit
+) {
+    var fieldValue by remember(verseText) { mutableStateOf(TextFieldValue(verseText)) }
+    val highlightColors = LocalHighlightColors.current
+    var selectedColor by remember { mutableStateOf(highlightColors.keys.first()) }
+    val hasSelection = !fieldValue.selection.collapsed
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Realçar um trecho") },
+        text = {
+            Column {
+                Text(verseReference, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Toque e arraste sobre o texto abaixo para escolher o trecho que quer realçar.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = fieldValue,
+                    onValueChange = { fieldValue = it },
+                    readOnly = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    "Cor do realce",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(bottom = 6.dp)
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    highlightColors.forEach { (colorName, color) ->
+                        val isSelected = selectedColor == colorName
+                        Box(
+                            modifier = Modifier
+                                .padding(end = 10.dp)
+                                .size(if (isSelected) 32.dp else 26.dp)
+                                .background(color, androidx.compose.foundation.shape.CircleShape)
+                                .clickable { selectedColor = colorName }
+                        )
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                TextButton(
+                    enabled = hasSelection,
+                    onClick = { onRemove(fieldValue.selection.min, fieldValue.selection.max) },
+                    modifier = Modifier.padding(start = 0.dp)
+                ) {
+                    Icon(Icons.Filled.FormatColorReset, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Text("Remover realce deste trecho", modifier = Modifier.padding(start = 6.dp))
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = hasSelection,
+                onClick = { onApply(fieldValue.selection.min, fieldValue.selection.max, selectedColor) }
+            ) { Text("Aplicar") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancelar") }
+        }
+    )
 }
 
 /** Diálogo para marcar esta página com um ou mais rótulos: pode selecionar
@@ -667,126 +834,6 @@ private fun BookmarkDialog(
     )
 }
 
-/** Diálogo para aplicar tags de estudo (ex.: "Salvação", "Fé") ao(s)
- *  versículo(s) selecionado(s): pode escolher várias tags já existentes de
- *  uma vez, e/ou criar uma tag nova com uma cor à sua escolha (mesma paleta
- *  usada nos marcadores e destaques). */
-@Composable
-private fun TagDialog(
-    allTags: List<TagEntity>,
-    alreadyAppliedNames: List<String>,
-    onDismiss: () -> Unit,
-    onSave: (newName: String, selectedExistingIds: Set<Long>, newColor: String) -> Unit
-) {
-    var newName by remember { mutableStateOf("") }
-    var selectedExisting by remember { mutableStateOf(setOf<Long>()) }
-    var selectedColor by remember { mutableStateOf<String?>(null) }
-    val highlightColors = LocalHighlightColors.current
-    val defaultColor = remember(highlightColors) { highlightColors.keys.first() }
-
-    // Selecionáveis: tags já existentes, exceto as que já estão neste versículo.
-    val selectableTags = remember(allTags, alreadyAppliedNames) {
-        allTags.filter { it.name !in alreadyAppliedNames }
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Tags de estudo") },
-        text = {
-            Column {
-                // 1) Usar uma ou mais tags já existentes
-                if (selectableTags.isNotEmpty()) {
-                    Text(
-                        "1. Usar tags já existentes (pode escolher várias)",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(bottom = 6.dp)
-                    )
-                    androidx.compose.foundation.lazy.LazyRow(
-                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(selectableTags) { tag ->
-                            val isChosen = tag.id in selectedExisting
-                            androidx.compose.material3.FilterChip(
-                                selected = isChosen,
-                                onClick = {
-                                    selectedExisting = if (isChosen) {
-                                        selectedExisting - tag.id
-                                    } else {
-                                        selectedExisting + tag.id
-                                    }
-                                },
-                                leadingIcon = {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(10.dp)
-                                            .background(
-                                                highlightColors[tag.color] ?: MaterialTheme.colorScheme.primary,
-                                                androidx.compose.foundation.shape.CircleShape
-                                            )
-                                    )
-                                },
-                                label = { Text(tag.name) }
-                            )
-                        }
-                    }
-                }
-
-                // 2) Criar uma tag nova
-                Text(
-                    "2. Ou criar uma tag nova",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(top = if (selectableTags.isNotEmpty()) 16.dp else 4.dp, bottom = 6.dp)
-                )
-                OutlinedTextField(
-                    value = newName,
-                    onValueChange = { newName = it },
-                    placeholder = { Text("Ex.: Salvação, Fé, Oração...") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                // 3) Cor da tag nova
-                Text(
-                    "3. Cor da tag nova",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(top = 16.dp, bottom = 6.dp)
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    highlightColors.forEach { (colorName, color) ->
-                        val isSelected = (selectedColor ?: defaultColor) == colorName
-                        Box(
-                            modifier = Modifier
-                                .padding(end = 10.dp)
-                                .size(if (isSelected) 32.dp else 26.dp)
-                                .background(color, androidx.compose.foundation.shape.CircleShape)
-                                .clickable { selectedColor = colorName }
-                        )
-                    }
-                }
-                Text(
-                    "Cada tag guarda sua própria cor, para reconhecer o tema de relance " +
-                        "ao rolar a página. Tags já existentes mantêm a cor que já têm.",
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = newName.isNotBlank() || selectedExisting.isNotEmpty(),
-                onClick = { onSave(newName.trim(), selectedExisting, selectedColor ?: defaultColor) }
-            ) { Text("Salvar") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancelar") }
-        }
-    )
-}
-
-
 /** Pequena fita no canto superior indicando que esta página tem um marcador salvo. */
 @Composable
 private fun BookmarkRibbon(tint: Color, modifier: Modifier = Modifier) {
@@ -840,6 +887,34 @@ private fun SelectionBar(
     }
 }
 
+/** Desenha um retângulo de realce atrás de um trecho [start, end) do texto,
+ *  linha por linha (para textos que quebram em várias linhas) — usado tanto
+ *  para o realce do versículo inteiro quanto para o realce de só um trecho
+ *  dele. Do início ao último caractere visível de cada linha (sem contar
+ *  espaço em branco final), com altura igual à caixa do próprio caractere —
+ *  não à altura cheia da linha (que inclui o entrelinhamento/leading, e por
+ *  isso "grudava" nas linhas vizinhas). */
+private fun DrawScope.drawTextRangeHighlight(layout: TextLayoutResult, start: Int, end: Int, color: Color) {
+    if (end <= start) return
+    for (lineIndex in 0 until layout.lineCount) {
+        val lineStart = layout.getLineStart(lineIndex)
+        val lineEnd = layout.getLineEnd(lineIndex, visibleEnd = true)
+        if (lineEnd <= lineStart) continue // linha em branco
+        val segStart = maxOf(lineStart, start)
+        val segEndExclusive = minOf(lineEnd, end)
+        if (segEndExclusive <= segStart) continue // esta linha não faz parte do trecho
+        val firstBox = layout.getBoundingBox(segStart)
+        val lastBox = layout.getBoundingBox(segEndExclusive - 1)
+        val top = minOf(firstBox.top, lastBox.top)
+        val bottom = maxOf(firstBox.bottom, lastBox.bottom)
+        drawRect(
+            color = color,
+            topLeft = Offset(firstBox.left, top),
+            size = Size(lastBox.right - firstBox.left, bottom - top)
+        )
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ChapterPage(
@@ -854,6 +929,10 @@ private fun ChapterPage(
     var verses by remember(ref) { mutableStateOf<List<Verse>>(emptyList()) }
     val highlights by remember(ref) { repository.observeHighlightsForChapter(ref.bookId, ref.chapter) }
         .collectAsState(initial = emptyList())
+    val partialHighlights by remember(ref) { repository.observePartialHighlightsForChapter(ref.bookId, ref.chapter) }
+        .collectAsState(initial = emptyList())
+    val tagColorsByVerse by remember(ref) { repository.observeTagColorsForChapter(ref.bookId, ref.chapter) }
+        .collectAsState(initial = emptyMap())
     val bookmarks by remember(ref) { repository.observeBookmarksForChapter(ref.bookId, ref.chapter) }
         .collectAsState(initial = emptyList())
     val listState = rememberLazyListState()
@@ -879,6 +958,7 @@ private fun ChapterPage(
     }
 
     val highlightMap = remember(highlights) { highlights.associateBy { it.verse } }
+    val partialHighlightMap = remember(partialHighlights) { partialHighlights.groupBy { it.verse } }
 
     Box(
         modifier = Modifier
@@ -923,6 +1003,8 @@ private fun ChapterPage(
             items(verses, key = { it.id }) { verse ->
                 val highlightColorName = highlightMap[verse.verse]?.color
                 val bgColor: Color? = highlightColorName?.let { highlightColors[it] }
+                val versePartials = partialHighlightMap[verse.verse] ?: emptyList()
+                val verseTagColors = tagColorsByVerse[verse.verse] ?: emptyList()
                 val isSelected = selectedNumbers.contains(verse.verse)
                 Row(
                     modifier = Modifier
@@ -970,25 +1052,54 @@ private fun ChapterPage(
                     // caractere — não à altura cheia da linha (que inclui o
                     // entrelinhamento/leading, e por isso "grudava" nas linhas vizinhas).
                     var textLayoutResult by remember(verse) { mutableStateOf<TextLayoutResult?>(null) }
+                    // Símbolo(s) de tag ao final do texto do versículo, um por tag
+                    // aplicada, na cor de cada tag — encaixado como "texto" (inline
+                    // content) para acompanhar o fluxo natural das palavras, inclusive
+                    // quando o versículo quebra em mais de uma linha.
+                    val displayedText = remember(verse, verseTagColors) {
+                        buildAnnotatedString {
+                            append(verse.text)
+                            verseTagColors.forEachIndexed { index, _ -> appendInlineContent("tag$index", "🏷") }
+                        }
+                    }
+                    val tagInlineContent = remember(verseTagColors, highlightColors) {
+                        verseTagColors.mapIndexed { index, colorName ->
+                            "tag$index" to InlineTextContent(
+                                Placeholder(width = 1.1.em, height = 1.1.em, placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(1.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Sell,
+                                        contentDescription = null,
+                                        tint = highlightColors[colorName] ?: MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
+                            }
+                        }.toMap()
+                    }
                     Text(
-                        text = verse.text,
+                        text = displayedText,
+                        inlineContent = tagInlineContent,
                         style = readingTextStyle(liveFontScale),
                         onTextLayout = { textLayoutResult = it },
                         modifier = Modifier.drawBehind {
-                            if (bgColor != null && !isSelected) {
+                            if (!isSelected) {
                                 textLayoutResult?.let { layout ->
-                                    for (lineIndex in 0 until layout.lineCount) {
-                                        val lineStart = layout.getLineStart(lineIndex)
-                                        val lineEnd = layout.getLineEnd(lineIndex, visibleEnd = true)
-                                        if (lineEnd <= lineStart) continue // linha em branco
-                                        val firstBox = layout.getBoundingBox(lineStart)
-                                        val lastBox = layout.getBoundingBox(lineEnd - 1)
-                                        val top = minOf(firstBox.top, lastBox.top)
-                                        val bottom = maxOf(firstBox.bottom, lastBox.bottom)
-                                        drawRect(
-                                            color = bgColor,
-                                            topLeft = Offset(firstBox.left, top),
-                                            size = Size(lastBox.right - firstBox.left, bottom - top)
+                                    if (bgColor != null) {
+                                        drawTextRangeHighlight(layout, 0, verse.text.length, bgColor)
+                                    }
+                                    versePartials.forEach { partial ->
+                                        val partialColor = highlightColors[partial.color] ?: return@forEach
+                                        drawTextRangeHighlight(
+                                            layout,
+                                            partial.startOffset.coerceIn(0, verse.text.length),
+                                            partial.endOffset.coerceIn(0, verse.text.length),
+                                            partialColor
                                         )
                                     }
                                 }

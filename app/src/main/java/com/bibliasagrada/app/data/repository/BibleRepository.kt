@@ -12,6 +12,7 @@ import com.bibliasagrada.app.data.room.FavoriteEntity
 import com.bibliasagrada.app.data.room.HighlightEntity
 import com.bibliasagrada.app.data.room.HistoryEntity
 import com.bibliasagrada.app.data.room.NoteEntity
+import com.bibliasagrada.app.data.room.PartialHighlightEntity
 import com.bibliasagrada.app.data.room.ReadingProgressEntity
 import com.bibliasagrada.app.data.room.TagEntity
 import com.bibliasagrada.app.data.room.UserDataDatabase
@@ -195,6 +196,12 @@ class BibleRepository(private val appContext: Context) {
     /** tagId -> quantidade de versículos marcados com ela. */
     fun observeTagCounts(): Flow<Map<Long, Int>> =
         userDb.verseTagDao().observeCounts().map { counts -> counts.associate { it.tagId to it.count } }
+    /** número do versículo -> lista de cores das tags aplicadas a ele, para um capítulo inteiro
+     *  (um versículo pode ter mais de uma tag, cada uma com sua cor) — usado para desenhar o
+     *  símbolo de tag colorido ao final do versículo na leitura. */
+    fun observeTagColorsForChapter(bookId: Int, chapter: Int): Flow<Map<Int, List<String>>> =
+        userDb.verseTagDao().observeColorsForChapter(bookId, chapter)
+            .map { rows -> rows.groupBy({ it.verse }, { it.color }) }
 
     /** Acha a tag pelo nome (sem diferenciar maiúsculas/minúsculas) ou cria uma nova com a cor dada. */
     suspend fun getOrCreateTag(name: String, color: String): Long {
@@ -241,6 +248,37 @@ class BibleRepository(private val appContext: Context) {
     suspend fun deleteTag(tagId: Long) {
         userDb.verseTagDao().deleteAllForTag(tagId)
         userDb.tagDao().deleteById(tagId)
+    }
+
+    // --- Realce de apenas um trecho do versículo (diferente da marcação do versículo inteiro) ---
+    fun observePartialHighlightsForChapter(bookId: Int, chapter: Int): Flow<List<PartialHighlightEntity>> =
+        userDb.partialHighlightDao().observeForChapter(bookId, chapter)
+
+    /** Realça só um trecho [start, end) do texto do versículo. Se o trecho escolhido colidir
+     *  com um realce parcial já existente nesse versículo, o(s) trecho(s) antigos que se
+     *  sobrepõem são removidos primeiro, para não empilhar cores confusas um sobre o outro. */
+    suspend fun setPartialHighlight(bookId: Int, chapter: Int, verse: Int, start: Int, end: Int, color: String) {
+        if (end <= start) return
+        val existing = userDb.partialHighlightDao().getForVerse(bookId, chapter, verse)
+        existing.filter { it.startOffset < end && start < it.endOffset }.forEach {
+            userDb.partialHighlightDao().deleteById(it.id)
+        }
+        userDb.partialHighlightDao().insert(
+            PartialHighlightEntity(bookId = bookId, chapter = chapter, verse = verse, startOffset = start, endOffset = end, color = color)
+        )
+    }
+
+    /** Remove qualquer realce parcial que se sobreponha ao trecho [start, end), sem aplicar nenhum novo. */
+    suspend fun removePartialHighlightsInRange(bookId: Int, chapter: Int, verse: Int, start: Int, end: Int) {
+        if (end <= start) return
+        val existing = userDb.partialHighlightDao().getForVerse(bookId, chapter, verse)
+        existing.filter { it.startOffset < end && start < it.endOffset }.forEach {
+            userDb.partialHighlightDao().deleteById(it.id)
+        }
+    }
+
+    suspend fun removePartialHighlight(id: Long) {
+        userDb.partialHighlightDao().deleteById(id)
     }
 
     // --- Versículo do dia ---

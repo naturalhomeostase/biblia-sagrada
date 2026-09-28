@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
@@ -27,11 +28,13 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -58,8 +61,11 @@ import kotlinx.coroutines.launch
 /**
  * Lista todas as tags de estudo criadas, cada uma com sua cor e a quantidade
  * de versículos marcados. Ao tocar numa tag, expande e mostra os versículos
- * — tocar num versículo abre o leitor naquele ponto; dá para remover a tag
- * de um versículo específico, ou apagar a tag inteira (com confirmação).
+ * — tocar num versículo abre o leitor naquele ponto. O ícone de lápis entra
+ * no modo de edição daquela tag (só então aparecem as opções de renomear,
+ * trocar cor, apagar a tag inteira, ou remover a tag de um versículo
+ * específico da lista) — fora do modo de edição, a tela fica só com o
+ * essencial: cor, nome, quantidade e os versículos.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -76,7 +82,10 @@ fun TagsScreen(
     var expandedTagId by remember { mutableStateOf<Long?>(null) }
     var versesForExpanded by remember { mutableStateOf<List<Verse>>(emptyList()) }
     var tagToDelete by remember { mutableStateOf<TagEntity?>(null) }
-    var tagToEdit by remember { mutableStateOf<TagEntity?>(null) }
+    var editingTagId by remember { mutableStateOf<Long?>(null) }
+    var editName by remember { mutableStateOf("") }
+    var editColor by remember { mutableStateOf("") }
+    var showFullText by remember { mutableStateOf(false) }
 
     // Referências (bookId/chapter/verse) da tag expandida, reativo: ao remover
     // a tag de um versículo pela lista abaixo, essa flow do Room emite de novo
@@ -88,6 +97,12 @@ fun TagsScreen(
 
     LaunchedEffect(expandedRefs) {
         versesForExpanded = expandedRefs.mapNotNull { repository.getVerse(it.bookId, it.chapter, it.verse) }
+    }
+
+    fun startEditing(tag: TagEntity) {
+        editingTagId = tag.id
+        editName = tag.name
+        editColor = tag.color
     }
 
     Scaffold(
@@ -105,91 +120,154 @@ fun TagsScreen(
             EmptyState(
                 icon = Icons.Filled.Sell,
                 message = "Você ainda não criou nenhuma tag.\nDurante a leitura, toque num versículo e use " +
-                    "\"Adicionar tag\" para marcar temas como \"Salvação\" ou \"Fé\" e encontrá-los aqui depois.",
+                    "\"Nova tag\" para marcar temas como \"Salvação\" ou \"Fé\" e encontrá-los aqui depois.",
                 modifier = Modifier.padding(padding)
             )
         } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentPadding = PaddingValues(16.dp)
-            ) {
-                items(tags, key = { it.id }) { tag ->
-                    val isExpanded = expandedTagId == tag.id
-                    val count = tagCounts[tag.id] ?: 0
-                    val tagColor = highlightColors[tag.color] ?: MaterialTheme.colorScheme.primary
+            Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Mostrar versículos completos", style = MaterialTheme.typography.bodyMedium)
+                    Switch(checked = showFullText, onCheckedChange = { showFullText = it })
+                }
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    items(tags, key = { it.id }) { tag ->
+                        val isExpanded = expandedTagId == tag.id
+                        val isEditing = editingTagId == tag.id
+                        val count = tagCounts[tag.id] ?: 0
+                        val tagColor = highlightColors[tag.color] ?: MaterialTheme.colorScheme.primary
 
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 10.dp)
-                            .animateContentSize(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
-                        Column(
+                        Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable {
-                                    expandedTagId = if (isExpanded) null else tag.id
-                                }
-                                .padding(14.dp)
+                                .padding(bottom = 10.dp)
+                                .animateContentSize(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                         ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        expandedTagId = if (isExpanded) null else tag.id
+                                    }
+                                    .padding(14.dp)
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                    Box(
-                                        modifier = Modifier
-                                            .padding(end = 8.dp)
-                                            .size(12.dp)
-                                            .background(tagColor, CircleShape)
-                                    )
-                                    Text(
-                                        tag.name,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(1f, fill = false)
-                                    )
-                                    Text(
-                                        " · $count",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                IconButton(onClick = { tagToEdit = tag }) {
-                                    Icon(Icons.Filled.Edit, contentDescription = "Editar tag \"${tag.name}\"")
-                                }
-                                IconButton(onClick = { tagToDelete = tag }) {
-                                    Icon(Icons.Filled.Delete, contentDescription = "Apagar tag \"${tag.name}\"")
-                                }
-                                Icon(
-                                    if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                                    contentDescription = if (isExpanded) "Recolher" else "Expandir"
-                                )
-                            }
-
-                            if (isExpanded) {
-                                Column(modifier = Modifier.padding(top = 10.dp)) {
-                                    if (count == 0) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                        Box(
+                                            modifier = Modifier
+                                                .padding(end = 8.dp)
+                                                .size(12.dp)
+                                                .background(tagColor, CircleShape)
+                                        )
                                         Text(
-                                            "Nenhum versículo marcado com esta tag ainda.",
-                                            style = MaterialTheme.typography.bodyMedium,
+                                            tag.name,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f, fill = false)
+                                        )
+                                        Text(
+                                            " · $count",
+                                            style = MaterialTheme.typography.labelMedium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
-                                    } else {
-                                        versesForExpanded.forEach { verse ->
-                                            TagVerseRow(
-                                                verse = verse,
-                                                onOpen = { onOpenReader(verse.bookId, verse.chapter, verse.verse) },
-                                                onRemove = {
-                                                    scope.launch {
-                                                        repository.removeVerseTag(tag.id, verse.bookId, verse.chapter, verse.verse)
-                                                    }
+                                    }
+                                    IconButton(onClick = {
+                                        if (isEditing) editingTagId = null else startEditing(tag)
+                                    }) {
+                                        Icon(
+                                            if (isEditing) Icons.Filled.Close else Icons.Filled.Edit,
+                                            contentDescription = if (isEditing) "Sair da edição" else "Editar tag \"${tag.name}\""
+                                        )
+                                    }
+                                    Icon(
+                                        if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                                        contentDescription = if (isExpanded) "Recolher" else "Expandir"
+                                    )
+                                }
+
+                                if (isEditing) {
+                                    Column(modifier = Modifier.padding(top = 10.dp)) {
+                                        HorizontalDivider(modifier = Modifier.padding(bottom = 10.dp))
+                                        OutlinedTextField(
+                                            value = editName,
+                                            onValueChange = { editName = it },
+                                            singleLine = true,
+                                            label = { Text("Nome da tag") },
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                        Text(
+                                            "Cor",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(top = 12.dp, bottom = 6.dp)
+                                        )
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            highlightColors.forEach { (colorName, swatch) ->
+                                                val isSelected = editColor == colorName
+                                                Box(
+                                                    modifier = Modifier
+                                                        .padding(end = 10.dp)
+                                                        .size(if (isSelected) 32.dp else 26.dp)
+                                                        .background(swatch, CircleShape)
+                                                        .clickable { editColor = colorName }
+                                                )
+                                            }
+                                        }
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            TextButton(onClick = { tagToDelete = tag }) {
+                                                Icon(Icons.Filled.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                                                Text("Apagar tag", modifier = Modifier.padding(start = 4.dp))
+                                            }
+                                            TextButton(
+                                                enabled = editName.isNotBlank(),
+                                                onClick = {
+                                                    scope.launch { repository.updateTag(tag, editName, editColor) }
+                                                    editingTagId = null
                                                 }
+                                            ) { Text("Salvar") }
+                                        }
+                                    }
+                                }
+
+                                if (isExpanded) {
+                                    Column(modifier = Modifier.padding(top = 10.dp)) {
+                                        if (count == 0) {
+                                            Text(
+                                                "Nenhum versículo marcado com esta tag ainda.",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
+                                        } else {
+                                            versesForExpanded.forEach { verse ->
+                                                TagVerseRow(
+                                                    verse = verse,
+                                                    showFullText = showFullText,
+                                                    showRemove = isEditing,
+                                                    onOpen = { onOpenReader(verse.bookId, verse.chapter, verse.verse) },
+                                                    onRemove = {
+                                                        scope.launch {
+                                                            repository.removeVerseTag(tag.id, verse.bookId, verse.chapter, verse.verse)
+                                                        }
+                                                    }
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -210,6 +288,7 @@ fun TagsScreen(
                 TextButton(onClick = {
                     scope.launch { repository.deleteTag(tag.id) }
                     if (expandedTagId == tag.id) expandedTagId = null
+                    if (editingTagId == tag.id) editingTagId = null
                     tagToDelete = null
                 }) { Text("Apagar") }
             },
@@ -218,22 +297,13 @@ fun TagsScreen(
             }
         )
     }
-
-    tagToEdit?.let { tag ->
-        EditTagDialog(
-            tag = tag,
-            onDismiss = { tagToEdit = null },
-            onSave = { newName, newColor ->
-                scope.launch { repository.updateTag(tag, newName, newColor) }
-                tagToEdit = null
-            }
-        )
-    }
 }
 
 @Composable
 private fun TagVerseRow(
     verse: Verse,
+    showFullText: Boolean,
+    showRemove: Boolean,
     onOpen: () -> Unit,
     onRemove: () -> Unit
 ) {
@@ -251,66 +321,14 @@ private fun TagVerseRow(
             Text(
                 verse.text,
                 style = MaterialTheme.typography.bodyMedium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+                maxLines = if (showFullText) Int.MAX_VALUE else 2,
+                overflow = if (showFullText) TextOverflow.Clip else TextOverflow.Ellipsis
             )
         }
-        IconButton(onClick = onRemove) {
-            Icon(Icons.Filled.Delete, contentDescription = "Remover esta tag deste versículo")
+        if (showRemove) {
+            IconButton(onClick = onRemove) {
+                Icon(Icons.Filled.Delete, contentDescription = "Remover esta tag deste versículo")
+            }
         }
     }
-}
-
-/** Diálogo simples para renomear uma tag e/ou trocar sua cor. */
-@Composable
-private fun EditTagDialog(
-    tag: TagEntity,
-    onDismiss: () -> Unit,
-    onSave: (newName: String, newColor: String) -> Unit
-) {
-    var name by remember(tag) { mutableStateOf(tag.name) }
-    var color by remember(tag) { mutableStateOf(tag.color) }
-    val highlightColors = LocalHighlightColors.current
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Editar tag") },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Text(
-                    "Cor",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(top = 16.dp, bottom = 6.dp)
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    highlightColors.forEach { (colorName, swatch) ->
-                        val isSelected = color == colorName
-                        Box(
-                            modifier = Modifier
-                                .padding(end = 10.dp)
-                                .size(if (isSelected) 32.dp else 26.dp)
-                                .background(swatch, CircleShape)
-                                .clickable { color = colorName }
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = name.isNotBlank(),
-                onClick = { onSave(name.trim(), color) }
-            ) { Text("Salvar") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancelar") }
-        }
-    )
 }
