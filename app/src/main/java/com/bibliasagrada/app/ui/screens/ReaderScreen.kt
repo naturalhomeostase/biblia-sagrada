@@ -47,6 +47,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.FormatColorReset
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Sell
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -147,7 +148,8 @@ fun ReaderScreen(
     initialBookId: Int,
     initialChapter: Int,
     initialVerse: Int,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onTranslations: (bookId: Int, chapter: Int) -> Unit
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -302,6 +304,9 @@ fun ReaderScreen(
                                 if (isChapterBookmarked) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder,
                                 contentDescription = if (isChapterBookmarked) "Remover marcador" else "Marcar esta página"
                             )
+                        }
+                        IconButton(onClick = { currentRef?.let { onTranslations(it.bookId, it.chapter) } }) {
+                            Icon(Icons.Filled.Translate, contentDescription = "Trocar tradução")
                         }
                         IconButton(onClick = { showQuickSettings = true }) {
                             Text(
@@ -864,14 +869,17 @@ private fun SelectionBar(
     onShare: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // A barra ocupa a largura toda e o texto de contagem recebe só o espaço que sobra
+    // (weight) — assim, com fonte grande no celular, o texto quebra em 2 linhas ou é
+    // cortado com "…", mas o botão "Ações" nunca é empurrado para fora da tela.
     Surface(
-        modifier = modifier.padding(16.dp),
+        modifier = modifier.fillMaxWidth().padding(16.dp),
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
         shadowElevation = 6.dp
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onCancel) {
@@ -880,11 +888,13 @@ private fun SelectionBar(
             Text(
                 if (count == 1) "1 versículo selecionado" else "$count versículos selecionados",
                 style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(horizontal = 4.dp)
+                maxLines = 2,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).padding(horizontal = 4.dp)
             )
             Button(onClick = onShare, modifier = Modifier.padding(start = 8.dp)) {
                 Icon(Icons.Filled.MoreVert, contentDescription = null, modifier = Modifier.padding(end = 6.dp))
-                Text("Ações")
+                Text("Ações", maxLines = 1, softWrap = false)
             }
         }
     }

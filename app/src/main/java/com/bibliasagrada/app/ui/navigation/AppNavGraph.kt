@@ -4,6 +4,10 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -30,6 +34,9 @@ import com.bibliasagrada.app.ui.screens.TranslationsScreen
 @Composable
 fun AppNavGraph(repository: BibleRepository) {
     val navController = rememberNavController()
+    // Se a troca de tradução foi aberta de dentro do leitor, guarda livro/capítulo para
+    // voltar exatamente ali depois (em vez de cair na lista de livros).
+    var readerReturn by remember { mutableStateOf<Pair<Int, Int>?>(null) }
 
     NavHost(navController = navController, startDestination = Routes.DAILY_VERSE) {
         composable(
@@ -69,7 +76,10 @@ fun AppNavGraph(repository: BibleRepository) {
                 onNotes = { navController.navigate(Routes.NOTES) },
                 onBookmarks = { navController.navigate(Routes.BOOKMARKS) },
                 onTags = { navController.navigate(Routes.TAGS) },
-                onTranslations = { navController.navigate(Routes.TRANSLATIONS) },
+                onTranslations = {
+                    readerReturn = null
+                    navController.navigate(Routes.TRANSLATIONS)
+                },
                 onPromises = { navController.navigate(Routes.PROMISES) },
                 onBackup = { navController.navigate(Routes.BACKUP) },
                 onHelp = { navController.navigate(Routes.HELP) },
@@ -106,7 +116,11 @@ fun AppNavGraph(repository: BibleRepository) {
                 initialBookId = bookId,
                 initialChapter = chapter,
                 initialVerse = verse,
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onTranslations = { b, c ->
+                    readerReturn = b to c
+                    navController.navigate(Routes.TRANSLATIONS)
+                }
             )
         }
         composable(Routes.SEARCH) {
@@ -168,11 +182,21 @@ fun AppNavGraph(repository: BibleRepository) {
                 repository = repository,
                 onBack = { navController.popBackStack() },
                 onTranslationSwitched = {
-                    // Após trocar de tradução, volta para a lista de livros e limpa
-                    // toda a pilha de navegação para que as telas recarreguem os
-                    // dados a partir do novo banco.
-                    navController.navigate(Routes.BOOKS) {
-                        popUpTo(0)
+                    val back = readerReturn
+                    readerReturn = null
+                    if (back != null) {
+                        // Veio do leitor: reabre o MESMO capítulo já na nova tradução. A pilha
+                        // acima da lista de livros é descartada para recarregar do novo banco.
+                        navController.navigate(Routes.reader(back.first, back.second)) {
+                            popUpTo(Routes.BOOKS)
+                        }
+                    } else {
+                        // Após trocar de tradução, volta para a lista de livros e limpa
+                        // toda a pilha de navegação para que as telas recarreguem os
+                        // dados a partir do novo banco.
+                        navController.navigate(Routes.BOOKS) {
+                            popUpTo(0)
+                        }
                     }
                 }
             )
